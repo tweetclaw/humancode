@@ -32,7 +32,7 @@ import { Proxied, ProxyIdentifier } from './proxyIdentifier.js';
 import { IRPCProtocolLogger, RPCProtocol, RequestInitiator, ResponsiveState } from './rpcProtocol.js';
 
 // Enable to see detailed message communication between window and extension host
-const LOG_EXTENSION_HOST_COMMUNICATION = false;
+const LOG_EXTENSION_HOST_COMMUNICATION = true;
 const LOG_USE_COLORS = true;
 
 type ExtensionHostStartupClassification = {
