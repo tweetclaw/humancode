@@ -89,6 +89,11 @@ export class ExtensionHostManager extends Disposable implements IExtensionHostMa
 		return friendlyExtHostName(this.kind, this.pid);
 	}
 
+	public getRPCLogger(): HumanCodeRPCLogger | null {
+		const logger = this._rpcProtocol?.getLogger();
+		return (logger instanceof HumanCodeRPCLogger) ? logger : null;
+	}
+
 	constructor(
 		extensionHost: IExtensionHost,
 		initialActivationEvents: string[],
@@ -250,7 +255,7 @@ export class ExtensionHostManager extends Disposable implements IExtensionHostMa
 
 		let logger: IRPCProtocolLogger | null = null;
 		if (LOG_EXTENSION_HOST_COMMUNICATION || this._environmentService.logExtensionHostCommunication) {
-			logger = new RPCLogger(kind);
+			logger = new HumanCodeRPCLogger(kind);
 		} else if (TelemetryRPCLogger.isEnabled()) {
 			logger = new TelemetryRPCLogger(this._telemetryService);
 		}
@@ -502,40 +507,6 @@ function pretty(data: any): any {
 	return prettyWithoutArrays(data);
 }
 
-class RPCLogger implements IRPCProtocolLogger {
-
-	private _totalIncoming = 0;
-	private _totalOutgoing = 0;
-
-	constructor(
-		private readonly _kind: ExtensionHostKind
-	) { }
-
-	private _log(direction: string, totalLength: number, msgLength: number, req: number, initiator: RequestInitiator, str: string, data: any): void {
-		data = pretty(data);
-
-		const colorTable = colorTables[initiator];
-		const color = LOG_USE_COLORS ? colorTable[req % colorTable.length] : '#000000';
-		let args = [`%c[${extensionHostKindToString(this._kind)}][${direction}]%c[${String(totalLength).padStart(7)}]%c[len: ${String(msgLength).padStart(5)}]%c${String(req).padStart(5)} - ${str}`, 'color: darkgreen', 'color: grey', 'color: grey', `color: ${color}`];
-		if (/\($/.test(str)) {
-			args = args.concat(data);
-			args.push(')');
-		} else {
-			args.push(data);
-		}
-		console.log.apply(console, args as [string, ...string[]]);
-	}
-
-	logIncoming(msgLength: number, req: number, initiator: RequestInitiator, str: string, data?: any): void {
-		this._totalIncoming += msgLength;
-		this._log('Ext \u2192 Win', this._totalIncoming, msgLength, req, initiator, str, data);
-	}
-
-	logOutgoing(msgLength: number, req: number, initiator: RequestInitiator, str: string, data?: any): void {
-		this._totalOutgoing += msgLength;
-		this._log('Win \u2192 Ext', this._totalOutgoing, msgLength, req, initiator, str, data);
-	}
-}
 
 interface RPCTelemetryData {
 	type: string;
@@ -589,6 +560,134 @@ class TelemetryRPCLogger implements IRPCProtocolLogger {
 				length: msgLength
 			});
 		}
+	}
+}
+
+export interface IRPCMessage {
+	direction: 'incoming' | 'outgoing';
+	timestamp: number;
+	requestId: number;
+	type: string;
+	method?: string;
+	data: any;
+	msgLength: number;
+}
+
+// 全局消息存储,避免循环依赖
+class GlobalRPCMessageStore {
+	private static _messages: IRPCMessage[] = [];
+	private static _emitter: Emitter<IRPCMessage> | null = null;
+
+	static addMessage(msg: IRPCMessage): void {
+		this._messages.push(msg);
+		this._emitter?.fire(msg);
+	}
+
+	static getMessages(): IRPCMessage[] {
+		return this._messages.slice();
+	}
+
+	static setEmitter(emitter: Emitter<IRPCMessage>): void {
+		this._emitter = emitter;
+	}
+}
+
+export const globalRPCMessageStore = GlobalRPCMessageStore;
+
+class HumanCodeRPCLogger implements IRPCProtocolLogger {
+
+	private _messageLog: IRPCMessage[] = [];
+	private readonly _onDidLogMessage = new Emitter<IRPCMessage>();
+	public readonly onDidLogMessage = this._onDidLogMessage.event;
+
+	constructor(
+		private readonly _kind: ExtensionHostKind
+	) { }
+
+	logIncoming(msgLength: number, req: number, initiator: RequestInitiator, str: string, data?: any): void {
+		// 只记录有意义的业务消息,过滤掉 ack
+		if (str.startsWith('receiveRequest')) {
+			const message: IRPCMessage = {
+				direction: 'incoming',
+				timestamp: Date.now(),
+				requestId: req,
+				type: 'request',
+				method: this._extractMethod(str),
+				data: this._sanitizeData(data),
+				msgLength
+			};
+			this._messageLog.push(message);
+			this._onDidLogMessage.fire(message);
+
+			// 发送到全局存储
+			this._sendToGlobalStore(message);
+		}
+
+		// 同时保留原有的控制台日志
+		if (LOG_EXTENSION_HOST_COMMUNICATION) {
+			this._logToConsole('Ext → Win', msgLength, req, initiator, str, data);
+		}
+	}
+
+	logOutgoing(msgLength: number, req: number, initiator: RequestInitiator, str: string, data?: any): void {
+		// 只记录 reply,忽略 ack
+		if (str.startsWith('reply:') && data !== undefined) {
+			const message: IRPCMessage = {
+				direction: 'outgoing',
+				timestamp: Date.now(),
+				requestId: req,
+				type: 'reply',
+				data: this._sanitizeData(data),
+				msgLength
+			};
+			this._messageLog.push(message);
+			this._onDidLogMessage.fire(message);
+
+			// 发送到全局存储
+			this._sendToGlobalStore(message);
+		}
+
+		// 同时保留原有的控制台日志
+		if (LOG_EXTENSION_HOST_COMMUNICATION) {
+			this._logToConsole('Win → Ext', msgLength, req, initiator, str, data);
+		}
+	}
+
+	private _sendToGlobalStore(message: IRPCMessage): void {
+		// 直接调用全局存储
+		globalRPCMessageStore.addMessage(message);
+	}
+
+	private _extractMethod(str: string): string {
+		// 从 "receiveRequest MainThreadCommands.$executeCommand(" 提取方法名
+		const match = str.match(/receiveRequest\s+(\S+)/);
+		return match ? match[1] : 'unknown';
+	}
+
+	private _sanitizeData(data: any): any {
+		try {
+			return JSON.parse(JSON.stringify(data));
+		} catch {
+			return String(data);
+		}
+	}
+
+	private _logToConsole(direction: string, msgLength: number, req: number, initiator: RequestInitiator, str: string, data: any): void {
+		data = pretty(data);
+		const colorTable = colorTables[initiator];
+		const color = LOG_USE_COLORS ? colorTable[req % colorTable.length] : '#000000';
+		let args = [`%c[${extensionHostKindToString(this._kind)}][${direction}]%c[len: ${String(msgLength).padStart(5)}]%c${String(req).padStart(5)} - ${str}`, 'color: darkgreen', 'color: grey', `color: ${color}`];
+		if (/\($/.test(str)) {
+			args = args.concat(data);
+			args.push(')');
+		} else {
+			args.push(data);
+		}
+		console.log.apply(console, args as [string, ...string[]]);
+	}
+
+	getMessages(): IRPCMessage[] {
+		return this._messageLog;
 	}
 }
 

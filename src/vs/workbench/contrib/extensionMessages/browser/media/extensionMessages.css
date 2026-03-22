@@ -1,0 +1,145 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.extension-messages-split {
+	display: flex;
+	height: 100%;
+	width: 100%;
+}
+
+.extension-messages-list {
+	flex: 0 0 50%;
+	height: 100%;
+	overflow: auto;
+	border-right: 1px solid var(--vscode-panel-border);
+}
+
+.extension-messages-details {
+	flex: 1;
+	height: 100%;
+	overflow: auto;
+	padding: 12px;
+}
+
+.extension-message {
+	display: flex;
+	align-items: center;
+	padding: 2px 8px;
+	font-size: 13px;
+	line-height: 22px;
+}
+
+.message-direction {
+	flex-shrink: 0;
+	width: 60px;
+	font-weight: 600;
+	margin-right: 8px;
+}
+
+.message-direction.incoming {
+	color: #4CAF50;
+}
+
+.message-direction.outgoing {
+	color: #2196F3;
+}
+
+.message-method {
+	flex-shrink: 0;
+	width: 200px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	margin-right: 8px;
+}
+
+.message-timestamp {
+	flex-shrink: 0;
+	width: 80px;
+	color: var(--vscode-descriptionForeground);
+	margin-right: 8px;
+}
+
+.message-data {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+}
+
+/* Details panel styles */
+.details-header {
+	margin-bottom: 16px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.details-direction {
+	font-size: 16px;
+	font-weight: 600;
+}
+
+.details-direction.incoming {
+	color: #4CAF50;
+}
+
+.details-direction.outgoing {
+	color: #2196F3;
+}
+
+.details-info {
+	margin-bottom: 16px;
+}
+
+.details-row {
+	margin-bottom: 8px;
+	font-size: 13px;
+}
+
+.details-data-section {
+	margin-top: 16px;
+}
+
+.details-data-header {
+	margin-bottom: 8px;
+	font-size: 13px;
+}
+
+.details-data-content {
+	background: var(--vscode-textCodeBlock-background);
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 4px;
+	padding: 12px;
+	font-family: var(--vscode-editor-font-family);
+	font-size: 12px;
+	white-space: pre-wrap;
+	word-break: break-all;
+	overflow-x: auto;
+	max-height: 400px;
+	overflow-y: auto;
+	user-select: text;
+	cursor: text;
+}
+
+.details-copy-button {
+	margin-top: 8px;
+	padding: 6px 12px;
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+	border: none;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 12px;
+}
+
+.details-copy-button:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.details-copy-button:active {
+	background: var(--vscode-button-background);
+}

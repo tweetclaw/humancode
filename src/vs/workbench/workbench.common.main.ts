@@ -442,4 +442,7 @@ import './contrib/editTelemetry/browser/editTelemetry.contribution.js';
 // Opener
 import './contrib/opener/browser/opener.contribution.js';
 
+// Extension Messages
+import './contrib/extensionMessages/browser/extensionMessages.contribution.js';
+
 //#endregion

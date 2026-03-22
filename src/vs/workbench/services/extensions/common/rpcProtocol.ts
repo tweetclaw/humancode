@@ -181,6 +181,10 @@ export class RPCProtocol extends Disposable implements IRPCProtocol {
 		return Promise.resolve();
 	}
 
+	public getLogger(): IRPCProtocolLogger | null {
+		return this._logger;
+	}
+
 	private _onWillSendRequest(req: number): void {
 		if (this._unacknowledgedCount === 0) {
 			// Since this is the first request we are sending in a while,

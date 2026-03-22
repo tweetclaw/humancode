@@ -165,6 +165,9 @@ import './contrib/tags/browser/workspaceTagsService.js';
 // Issues
 import './contrib/issue/browser/issue.contribution.js';
 
+// Extension Messages
+import './contrib/extensionMessages/browser/extensionMessages.contribution.js';
+
 // Splash
 import './contrib/splash/browser/splash.contribution.js';
 
