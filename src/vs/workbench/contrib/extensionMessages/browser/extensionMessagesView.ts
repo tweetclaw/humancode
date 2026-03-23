@@ -168,21 +168,32 @@ export class ExtensionMessagesViewPane extends ViewPane {
 		direction.className = `details-direction ${message.direction}`;
 
 		const info = dom.append(this.detailsContainer, dom.$('.details-info'));
+
 		const method = dom.append(info, dom.$('.details-row'));
-		method.innerHTML = `<strong>Method:</strong> ${message.method || message.type}`;
+		const methodLabel = dom.append(method, dom.$('strong'));
+		methodLabel.textContent = 'Method: ';
+		const methodValue = dom.append(method, dom.$('span'));
+		methodValue.textContent = message.method || message.type;
 
 		const time = dom.append(info, dom.$('.details-row'));
+		const timeLabel = dom.append(time, dom.$('strong'));
+		timeLabel.textContent = 'Time: ';
+		const timeValue = dom.append(time, dom.$('span'));
 		const timestamp = new Date(message.timestamp);
-		time.innerHTML = `<strong>Time:</strong> ${timestamp.toLocaleString()}`;
+		timeValue.textContent = timestamp.toLocaleString();
 
 		if (message.requestId) {
 			const reqId = dom.append(info, dom.$('.details-row'));
-			reqId.innerHTML = `<strong>Request ID:</strong> ${message.requestId}`;
+			const reqIdLabel = dom.append(reqId, dom.$('strong'));
+			reqIdLabel.textContent = 'Request ID: ';
+			const reqIdValue = dom.append(reqId, dom.$('span'));
+			reqIdValue.textContent = String(message.requestId);
 		}
 
 		const dataSection = dom.append(this.detailsContainer, dom.$('.details-data-section'));
 		const dataHeader = dom.append(dataSection, dom.$('.details-data-header'));
-		dataHeader.innerHTML = '<strong>Data:</strong>';
+		const dataHeaderLabel = dom.append(dataHeader, dom.$('strong'));
+		dataHeaderLabel.textContent = 'Data:';
 
 		const dataContent = dom.append(dataSection, dom.$('.details-data-content'));
 		const dataStr = JSON.stringify(message.data, null, 2);
