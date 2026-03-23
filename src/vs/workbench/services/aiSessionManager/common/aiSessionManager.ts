@@ -14,8 +14,8 @@
  * 对应文档: docs/phases/phase1.md
  *--------------------------------------------------------------------------------------------*/
 
-import { Event } from 'vs/base/common/event';
-import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { Event } from '../../../../base/common/event.js';
+import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 
 // ─────────────────────────────────────────────────────────────
 // 枚举与联合类型

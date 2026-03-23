@@ -445,4 +445,7 @@ import './contrib/opener/browser/opener.contribution.js';
 // Extension Messages
 import './contrib/extensionMessages/browser/extensionMessages.contribution.js';
 
+// AI Team
+import './contrib/aiTeam/browser/aiTeam.contribution.js';
+
 //#endregion

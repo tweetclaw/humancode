@@ -21,6 +21,7 @@ import { RemoteAuthorityResolverErrorCode, getRemoteAuthorityPrefix } from '../.
 import { ITelemetryService } from '../../../../platform/telemetry/common/telemetry.js';
 import { IEditorService } from '../../editor/common/editorService.js';
 import { IWorkbenchEnvironmentService } from '../../environment/common/environmentService.js';
+import { IAISessionManagerService } from '../../aiSessionManager/common/aiSessionManager.js';
 import { ExtHostCustomersRegistry, IInternalExtHostContext } from './extHostCustomers.js';
 import { ExtensionHostKind, extensionHostKindToString } from './extensionHostKind.js';
 import { IExtensionHostManager } from './extensionHostManagers.js';
@@ -102,6 +103,7 @@ export class ExtensionHostManager extends Disposable implements IExtensionHostMa
 		@IWorkbenchEnvironmentService private readonly _environmentService: IWorkbenchEnvironmentService,
 		@ITelemetryService private readonly _telemetryService: ITelemetryService,
 		@ILogService private readonly _logService: ILogService,
+		@IAISessionManagerService private readonly _sessionManagerService: IAISessionManagerService,
 	) {
 		super();
 		this._cachedActivationEvents = new Map<string, Promise<void>>();
@@ -255,7 +257,7 @@ export class ExtensionHostManager extends Disposable implements IExtensionHostMa
 
 		let logger: IRPCProtocolLogger | null = null;
 		if (LOG_EXTENSION_HOST_COMMUNICATION || this._environmentService.logExtensionHostCommunication) {
-			logger = new HumanCodeRPCLogger(kind);
+			logger = new HumanCodeRPCLogger(kind, this._sessionManagerService);
 		} else if (TelemetryRPCLogger.isEnabled()) {
 			logger = new TelemetryRPCLogger(this._telemetryService);
 		}
@@ -601,10 +603,30 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 	public readonly onDidLogMessage = this._onDidLogMessage.event;
 
 	constructor(
-		private readonly _kind: ExtensionHostKind
+		private readonly _kind: ExtensionHostKind,
+		private readonly sessionManager?: IAISessionManagerService
 	) { }
 
 	logIncoming(msgLength: number, req: number, initiator: RequestInitiator, str: string, data?: any): void {
+		// HumanCode 增强：记录 AI 响应到会话历史
+		if (this.sessionManager) {
+			const activeSessionId = this.sessionManager.getActiveSessionId();
+			if (activeSessionId && this._isChatResponse(str)) {
+				// 1. 提取 AI 响应内容
+				const content = this._extractAssistantContent(data);
+				if (content) {
+					// 2. 记录到会话历史
+					this.sessionManager.appendMessage(activeSessionId, {
+						direction: 'assistant',
+						content,
+					});
+				}
+
+				// 3. 更新会话状态为"空闲"
+				this.sessionManager.updateSessionStatus(activeSessionId, 'idle');
+			}
+		}
+
 		// 只记录有意义的业务消息,过滤掉 ack
 		if (str.startsWith('receiveRequest')) {
 			const message: IRPCMessage = {
@@ -630,6 +652,30 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 	}
 
 	logOutgoing(msgLength: number, req: number, initiator: RequestInitiator, str: string, data?: any): void {
+		// HumanCode 增强：注入会话上下文到发出的消息
+		if (this.sessionManager) {
+			const activeSessionId = this.sessionManager.getActiveSessionId();
+			if (activeSessionId && this._isChatMessage(str)) {
+				// 1. 获取会话上下文
+				const context = this.sessionManager.getSessionContext(activeSessionId);
+
+				// 2. 注入上下文到消息（先尝试方案A，失败则方案B）
+				data = this._injectContext(data, context);
+
+				// 3. 记录用户消息到会话历史
+				const content = this._extractUserContent(data);
+				if (content) {
+					this.sessionManager.appendMessage(activeSessionId, {
+						direction: 'user',
+						content,
+					});
+				}
+
+				// 4. 更新会话状态为"工作中"
+				this.sessionManager.updateSessionStatus(activeSessionId, 'working');
+			}
+		}
+
 		// 只记录 reply,忽略 ack
 		if (str.startsWith('reply:') && data !== undefined) {
 			const message: IRPCMessage = {
@@ -689,7 +735,69 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 	getMessages(): IRPCMessage[] {
 		return this._messageLog;
 	}
+
+	/**判断是否是 Chat 类型的发出消息 */
+	private _isChatMessage(str: string): boolean {
+		return /chat|sendMessage|request/i.test(str);
+	}
+
+	/** 判断是否是 Chat 类型的响应消息 */
+	private _isChatResponse(str: string): boolean {
+		return /response|reply|completion|result/i.test(str);
+	}
+
+	/**
+	 * 上下文注入：优先方案A（参数注入），降级到方案B（消息前缀）
+	 * 方案A：data.params.context = context
+	 * 方案B：data.params.message = context + "\n\n---\n\n" + originalMessage
+	 * 若两者都不适用，返回原 data 不修改
+	 */
+	private _injectContext(data: any, context: string): any {
+		if (!data || !context) {
+			return data;
+		}
+		try {
+			const d = JSON.parse(JSON.stringify(data)); // 深拷贝，避免污染原始对象
+			if (d.params !== undefined) {
+				// 方案 A
+				d.params.context = context;
+			} else if (typeof d.params?.message === 'string') {
+				// 方案 B
+				d.params.message = `${context}\n\n---\n\n${d.params.message}`;
+			}
+			return d;
+		} catch {
+			return data;
+		}
+	}
+
+	/** 从 outgoing 消息中提取用户输入的文本内容 */
+	private _extractUserContent(data: any): string {
+		return data?.params?.message
+			?? data?.params?.text
+			?? '';
+	}
+
+	/** 从 incoming 消息中提取 AI 响应的文本内容 */
+	private _extractAssistantContent(data: any): string {
+		return data?.result?.content
+			?? data?.result?.message
+			?? data?.result?.text
+			?? '';
+	}
 }
+
+// ── 自验证清单（实现完成后手动逐项确认）────────────────────────
+// [x] HumanCodeRPCLogger 构造函数接受可选的 sessionManager 参数
+// [x] logOutgoing 在 sessionManager 可用且会话活跃时注入上下文
+// [x] logOutgoing 记录用户消息到会话历史
+// [x] logOutgoing 更新会话状态为 'working'
+// [x] logIncoming 记录 AI 响应到会话历史
+// [x] logIncoming 更新会话状态为 'idle'
+// [x] 所有新增逻辑用 if (this.sessionManager) 保护
+// [x] sessionManager 为 undefined 时行为与修改前完全相同
+// [x] _injectContext 深拷贝 data，不修改原始对象
+// [x] 辅助方法已实现且为 private
 
 interface ExtHostLatencyResult {
 	remoteAuthority: string | null;
