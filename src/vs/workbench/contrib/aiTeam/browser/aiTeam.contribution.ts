@@ -14,7 +14,7 @@ import { IAISessionManagerService } from '../../../services/aiSessionManager/com
 import { AISessionManagerService } from '../../../services/aiSessionManager/browser/aiSessionManagerService.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 
-// Register Real Service (Mock service available in mockAISessionManagerService.ts for testing)
+// Register AI Session Manager Service
 registerSingleton(IAISessionManagerService, AISessionManagerService, InstantiationType.Delayed);
 
 // Register view container in Sidebar

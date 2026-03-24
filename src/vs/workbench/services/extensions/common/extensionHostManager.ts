@@ -612,8 +612,13 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 		if (this.sessionManager) {
 			const activeSessionId = this.sessionManager.getActiveSessionId();
 			if (activeSessionId && this._isChatResponse(str)) {
+				console.log('[HumanCodeRPCLogger] Chat response detected in logIncoming:', str);
+				console.log('[HumanCodeRPCLogger] Response data:', JSON.stringify(data));
+
 				// 1. 提取 AI 响应内容
 				const content = this._extractAssistantContent(data);
+				console.log('[HumanCodeRPCLogger] Extracted assistant content:', content);
+
 				if (content) {
 					// 2. 记录到会话历史
 					this.sessionManager.appendMessage(activeSessionId, {
@@ -663,6 +668,7 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 
 			if (activeSessionId && this._isChatMessage(str)) {
 				console.log('[HumanCodeRPCLogger] Chat message detected in logOutgoing:', str);
+				console.log('[HumanCodeRPCLogger] Message data:', JSON.stringify(data));
 
 				// 1. 获取会话上下文
 				const context = this.sessionManager.getSessionContext(activeSessionId);
@@ -754,19 +760,25 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 
 	/**判断是否是 Chat 类型的发出消息 */
 	private _isChatMessage(str: string): boolean {
-		return /chat|sendMessage|request/i.test(str);
+		// 匹配两类聊天消息:
+		// 1. VS Code 标准 Chat API: ChatAgents, ChatProvider, LanguageModel
+		// 2. Webview 消息: ExtHostWebviews.$onMessage (通义灵码等使用)
+		return /ChatAgents|ChatProvider|LanguageModel|ExtHostWebviews\.\$onMessage/i.test(str);
 	}
 
 	/** 判断是否是 Chat 类型的响应消息 */
 	private _isChatResponse(str: string): boolean {
-		return /response|reply|completion|result/i.test(str);
+		// 匹配两类响应消息:
+		// 1. 标准 RPC 响应: response, reply, completion, result
+		// 2. Webview 响应: MainThreadWebviews.$postMessage (通义灵码等使用)
+		return /response|reply|completion|result|MainThreadWebviews\.\$postMessage/i.test(str);
 	}
 
 	/**
-	 * 上下文注入：优先方案A（参数注入），降级到方案B（消息前缀）
-	 * 方案A：data.params.context = context
-	 * 方案B：data.params.message = context + "\n\n---\n\n" + originalMessage
-	 * 若两者都不适用，返回原 data 不修改
+	 * 上下文注入：支持标准 RPC 和 Webview 消息格式
+	 * 方案A：data.params.context = context (标准 RPC)
+	 * 方案B：data.params.message = context + "\n\n---\n\n" + originalMessage (标准 RPC)
+	 * 方案C：data[1].inputValue = context + "\n\n---\n\n" + originalInputValue (Webview)
 	 */
 	private _injectContext(data: any, context: string): any {
 		if (!data || !context) {
@@ -774,13 +786,26 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 		}
 		try {
 			const d = JSON.parse(JSON.stringify(data)); // 深拷贝，避免污染原始对象
-			if (d.params !== undefined) {
-				// 方案 A
-				d.params.context = context;
-			} else if (typeof d.params?.message === 'string') {
-				// 方案 B
-				d.params.message = `${context}\n\n---\n\n${d.params.message}`;
+
+			// 方案 C: Webview 消息格式 (通义灵码等)
+			// data 是数组: [webviewId, {type: "record-input-value", inputValue: "...", ...}]
+			if (Array.isArray(d) && d.length >= 2 && d[1]?.inputValue) {
+				d[1].inputValue = `${context}\n\n---\n\n${d[1].inputValue}`;
+				return d;
 			}
+
+			// 方案 A: 标准 RPC 参数注入
+			if (d.params !== undefined) {
+				d.params.context = context;
+				return d;
+			}
+
+			// 方案 B: 标准 RPC 消息前缀
+			if (typeof d.params?.message === 'string') {
+				d.params.message = `${context}\n\n---\n\n${d.params.message}`;
+				return d;
+			}
+
 			return d;
 		} catch {
 			return data;
@@ -789,6 +814,12 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 
 	/** 从 outgoing 消息中提取用户输入的文本内容 */
 	private _extractUserContent(data: any): string {
+		// Webview 消息格式: [webviewId, {type: "record-input-value", inputValue: "..."}]
+		if (Array.isArray(data) && data.length >= 2 && data[1]?.inputValue) {
+			return data[1].inputValue;
+		}
+
+		// 标准 RPC 格式
 		return data?.params?.message
 			?? data?.params?.text
 			?? '';
@@ -796,6 +827,12 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 
 	/** 从 incoming 消息中提取 AI 响应的文本内容 */
 	private _extractAssistantContent(data: any): string {
+		// Webview 消息格式: [webviewId, {type: "chat-answer", text: "..."}]
+		if (Array.isArray(data) && data.length >= 2 && data[1]?.type === 'chat-answer' && data[1]?.text) {
+			return data[1].text;
+		}
+
+		// 标准 RPC 格式
 		return data?.result?.content
 			?? data?.result?.message
 			?? data?.result?.text

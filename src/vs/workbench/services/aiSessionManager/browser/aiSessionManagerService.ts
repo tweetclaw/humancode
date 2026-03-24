@@ -17,6 +17,7 @@
 
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 import {
 	IAISessionManagerService,
 	ISessionConfig,
@@ -26,6 +27,21 @@ import {
 	SessionStatus,
 	ISessionMetadata
 } from '../common/aiSessionManager.js';
+
+/**
+ * 用于持久化存储的精简会话上下文接口
+ * 不包含 conversationHistory，以减少存储大小
+ */
+interface ISerializableSessionContext {
+	sessionId: string;
+	name: string;
+	role: string;
+	extensionId: string;
+	systemPrompt: string;
+	avatarColor?: string;
+	skillTags?: string[];
+	metadata: ISessionMetadata;
+}
 
 export class AISessionManagerService extends Disposable implements IAISessionManagerService {
 
@@ -48,10 +64,18 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 	private readonly _onDidRelayMessage = this._register(new Emitter<{ request: IRelayRequest; prompt: string }>());
 	public readonly onDidRelayMessage: Event<{ request: IRelayRequest; prompt: string }> = this._onDidRelayMessage.event;
 
-	constructor() {
+	// ── 持久化存储 ────────────────────────────────────────────
+	private static readonly STORAGE_KEY = 'aiSessionManager.sessions';
+
+	constructor(
+		@IStorageService private readonly _storageService: IStorageService
+	) {
 		super();
 		this._sessions = new Map();
 		this._activeSessionId = null;
+
+		// 从存储中加载已保存的会话
+		this._loadSessions();
 	}
 
 	// ── 会话生命周期 ──────────────────────────────────────────
@@ -82,6 +106,9 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 		this._sessions.set(sessionId, session);
 		this._onDidSessionsChange.fire();
 
+		// 持久化保存
+		this._saveSessions();
+
 		return sessionId;
 	}
 
@@ -103,6 +130,9 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 		}
 
 		this._onDidSessionsChange.fire();
+
+		// 持久化保存
+		this._saveSessions();
 	}
 
 	getAllSessions(): ISessionContext[] {
@@ -114,15 +144,21 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 	// ── 活跃会话管理 ──────────────────────────────────────────
 
 	getActiveSessionId(): string | null {
+		console.log('[AISessionManagerService] getActiveSessionId called, returning:', this._activeSessionId);
 		return this._activeSessionId;
 	}
 
 	setActiveSession(sessionId: string): void {
+		console.log('[AISessionManagerService] setActiveSession called with sessionId:', sessionId);
+		console.log('[AISessionManagerService] Current activeSessionId before change:', this._activeSessionId);
+
 		const session = this._sessions.get(sessionId);
 		if (!session) {
+			console.error('[AISessionManagerService] Session not found:', sessionId);
 			return;
 		}
 		this._activeSessionId = sessionId;
+		console.log('[AISessionManagerService] activeSessionId updated to:', this._activeSessionId);
 	}
 
 	clearActiveSession(): void {
@@ -260,6 +296,65 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 
 	private generateMessageId(): string {
 		return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+	}
+
+	// ── 持久化方法 ────────────────────────────────────────────
+
+	/**
+	 * 从存储中加载已保存的会话
+	 * 在构造函数中调用，恢复上次保存的会话状态
+	 */
+	private _loadSessions(): void {
+		try {
+			const stored = this._storageService.get(
+				AISessionManagerService.STORAGE_KEY,
+				StorageScope.WORKSPACE
+			);
+
+			if (stored) {
+				const sessions: ISerializableSessionContext[] = JSON.parse(stored);
+				sessions.forEach(session => {
+					// 恢复会话，但历史消息为空（不持久化历史消息）
+					const fullSession: ISessionContext = {
+						...session,
+						conversationHistory: []
+					};
+					this._sessions.set(session.sessionId, fullSession);
+				});
+			}
+		} catch (error) {
+			// 加载失败不阻塞服务启动，仅记录错误
+			console.error('[AISessionManagerService] Failed to load sessions:', error);
+		}
+	}
+
+	/**
+	 * 将当前会话列表保存到存储
+	 * 只保存会话配置，不保存历史消息
+	 */
+	private _saveSessions(): void {
+		try {
+			const sessions: ISerializableSessionContext[] = Array.from(this._sessions.values()).map(session => ({
+				sessionId: session.sessionId,
+				name: session.name,
+				role: session.role,
+				extensionId: session.extensionId,
+				systemPrompt: session.systemPrompt,
+				avatarColor: session.avatarColor,
+				skillTags: session.skillTags,
+				metadata: session.metadata
+			}));
+
+			this._storageService.store(
+				AISessionManagerService.STORAGE_KEY,
+				JSON.stringify(sessions),
+				StorageScope.WORKSPACE,
+				StorageTarget.USER
+			);
+		} catch (error) {
+			// 保存失败不影响内存中的会话状态，仅记录错误
+			console.error('[AISessionManagerService] Failed to save sessions:', error);
+		}
 	}
 }
 

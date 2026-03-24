@@ -43,11 +43,18 @@
 	background: var(--vscode-editor-background);
 	border: 1px solid var(--vscode-panel-border);
 	border-radius: 6px;
-	transition: box-shadow 0.2s;
+	transition: all 0.2s;
+	cursor: pointer;
 }
 
 .ai-role-card:hover {
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.ai-role-card.active {
+	border-color: var(--vscode-focusBorder);
+	background: var(--vscode-list-activeSelectionBackground);
+	box-shadow: 0 0 0 1px var(--vscode-focusBorder);
 }
 
 .status-indicator {
@@ -123,4 +130,8 @@
 	flex: 1;
 	font-size: 11px;
 	padding: 4px 8px;
+}
+
+.card-action-button.delete-button {
+	color: var(--vscode-errorForeground);
 }

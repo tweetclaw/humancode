@@ -99,6 +99,26 @@ export class AITeamPanel extends ViewPane {
 		const card = dom.append(this.cardsContainer, dom.$('.ai-role-card'));
 		card.dataset['sessionId'] = session.sessionId;
 
+		// Check if this is the active session
+		const activeSessionId = this.sessionManagerService.getActiveSessionId();
+		if (activeSessionId === session.sessionId) {
+			card.classList.add('active');
+		}
+
+		// Make card clickable to activate session
+		this._register(dom.addDisposableListener(card, 'click', (e) => {
+			console.log('[AITeamPanel] Card clicked, sessionId:', session.sessionId);
+			console.log('[AITeamPanel] Click target:', (e.target as HTMLElement).className);
+
+			// Don't activate if clicking on buttons
+			if ((e.target as HTMLElement).closest('.card-actions')) {
+				console.log('[AITeamPanel] Click on button area, ignoring');
+				return;
+			}
+			console.log('[AITeamPanel] Calling handleActivateSession');
+			this.handleActivateSession(session.sessionId);
+		}));
+
 		// Status indicator
 		const statusIndicator = dom.append(card, dom.$('.status-indicator'));
 		statusIndicator.classList.add(`status-${session.metadata.status}`);
@@ -136,6 +156,11 @@ export class AITeamPanel extends ViewPane {
 		relayButton.label = '→ Relay';
 		relayButton.element.classList.add('card-action-button');
 		this._register(relayButton.onDidClick(() => this.handleRelay(session.sessionId)));
+
+		const deleteButton = this._register(new Button(actions, { ...defaultButtonStyles, secondary: true }));
+		deleteButton.label = '✕ Delete';
+		deleteButton.element.classList.add('card-action-button', 'delete-button');
+		this._register(deleteButton.onDidClick(() => this.handleDeleteSession(session.sessionId)));
 	}
 
 	private updateCardStatus(sessionId: string): void {
@@ -204,12 +229,19 @@ export class AITeamPanel extends ViewPane {
 			return;
 		}
 
-		// Create session with default configuration
+		const defaultSystemPrompt = `You are ${name}, a ${role} expert. Help the user with tasks related to ${role}.`;
+		const systemPrompt = await this.quickInputService.input({
+			prompt: localize('aiTeam.addMember.systemPrompt', "Enter the system prompt (optional, press Enter to use default)"),
+			placeHolder: localize('aiTeam.addMember.systemPromptPlaceholder', "Custom instructions for this AI..."),
+			value: defaultSystemPrompt
+		});
+
+		// Create session with user-provided or default system prompt
 		this.sessionManagerService.createSession({
 			name,
 			role,
 			extensionId: 'github.copilot',
-			systemPrompt: `You are ${name}, a ${role} expert. Help the user with tasks related to ${role}.`,
+			systemPrompt: systemPrompt || defaultSystemPrompt,
 			avatarColor: this.getRandomColor(),
 			skillTags: []
 		});
@@ -246,6 +278,54 @@ export class AITeamPanel extends ViewPane {
 			});
 			this.sessionManagerService.updateSessionStatus(sessionId, 'idle');
 		}, 2000);
+	}
+
+	private handleActivateSession(sessionId: string): void {
+		console.log('[AITeamPanel] handleActivateSession called with sessionId:', sessionId);
+
+		// Set as active session
+		this.sessionManagerService.setActiveSession(sessionId);
+		console.log('[AITeamPanel] setActiveSession called');
+
+		// Update visual state of all cards
+		if (!this.cardsContainer) {
+			return;
+		}
+
+		const allCards = this.cardsContainer.querySelectorAll('.ai-role-card');
+		allCards.forEach(card => {
+			if (card instanceof HTMLElement) {
+				if (card.dataset['sessionId'] === sessionId) {
+					card.classList.add('active');
+				} else {
+					card.classList.remove('active');
+				}
+			}
+		});
+	}
+
+	private async handleDeleteSession(sessionId: string): Promise<void> {
+		const session = this.sessionManagerService.getSession(sessionId);
+		if (!session) {
+			return;
+		}
+
+		// Show confirmation dialog
+		const picks = [
+			{ label: localize('aiTeam.delete.confirm', "Yes, Delete"), value: true },
+			{ label: localize('aiTeam.delete.cancel', "Cancel"), value: false }
+		];
+
+		const selected = await this.quickInputService.pick(picks, {
+			placeHolder: localize('aiTeam.delete.prompt', "Delete '{0}'? This cannot be undone.", session.name)
+		});
+
+		if (!selected || !selected.value) {
+			return;
+		}
+
+		// Delete the session
+		this.sessionManagerService.deleteSession(sessionId);
 	}
 
 	private async handleRelay(fromSessionId: string): Promise<void> {
