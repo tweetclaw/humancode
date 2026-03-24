@@ -653,11 +653,20 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 
 	logOutgoing(msgLength: number, req: number, initiator: RequestInitiator, str: string, data?: any): void {
 		// HumanCode 增强：注入会话上下文到发出的消息
+		console.log('[HumanCodeRPCLogger] logOutgoing called, str:', str);
+		console.log('[HumanCodeRPCLogger] sessionManager exists:', !!this.sessionManager);
+
 		if (this.sessionManager) {
 			const activeSessionId = this.sessionManager.getActiveSessionId();
+			console.log('[HumanCodeRPCLogger] activeSessionId:', activeSessionId);
+			console.log('[HumanCodeRPCLogger] _isChatMessage result:', this._isChatMessage(str));
+
 			if (activeSessionId && this._isChatMessage(str)) {
+				console.log('[HumanCodeRPCLogger] Chat message detected in logOutgoing:', str);
+
 				// 1. 获取会话上下文
 				const context = this.sessionManager.getSessionContext(activeSessionId);
+				console.log('[HumanCodeRPCLogger] Session context:', context);
 
 				// 2. 注入上下文到消息（先尝试方案A，失败则方案B）
 				data = this._injectContext(data, context);
@@ -665,6 +674,7 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 				// 3. 记录用户消息到会话历史
 				const content = this._extractUserContent(data);
 				if (content) {
+					console.log('[HumanCodeRPCLogger] User content extracted:', content);
 					this.sessionManager.appendMessage(activeSessionId, {
 						direction: 'user',
 						content,
@@ -676,21 +686,24 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 			}
 		}
 
-		// 只记录 reply,忽略 ack
-		if (str.startsWith('reply:') && data !== undefined) {
-			const message: IRPCMessage = {
-				direction: 'outgoing',
-				timestamp: Date.now(),
-				requestId: req,
-				type: 'reply',
-				data: this._sanitizeData(data),
-				msgLength
-			};
-			this._messageLog.push(message);
-			this._onDidLogMessage.fire(message);
+		// 记录 request 和 reply 类型的消息
+		if (str.startsWith('request:') || str.startsWith('reply:')) {
+			if (data !== undefined) {
+				const message: IRPCMessage = {
+					direction: 'outgoing',
+					timestamp: Date.now(),
+					requestId: req,
+					type: str.startsWith('request:') ? 'request' : 'reply',
+					method: str.startsWith('request:') ? this._extractMethod(str) : undefined,
+					data: this._sanitizeData(data),
+					msgLength
+				};
+				this._messageLog.push(message);
+				this._onDidLogMessage.fire(message);
 
-			// 发送到全局存储
-			this._sendToGlobalStore(message);
+				// 发送到全局存储
+				this._sendToGlobalStore(message);
+			}
 		}
 
 		// 同时保留原有的控制台日志
@@ -705,8 +718,11 @@ class HumanCodeRPCLogger implements IRPCProtocolLogger {
 	}
 
 	private _extractMethod(str: string): string {
-		// 从 "receiveRequest MainThreadCommands.$executeCommand(" 提取方法名
-		const match = str.match(/receiveRequest\s+(\S+)/);
+		// 从 "receiveRequest MainThreadCommands.$executeCommand(" 或 "request: ExtHostWebviews.$onMessage(" 提取方法名
+		let match = str.match(/receiveRequest\s+(\S+)/);
+		if (!match) {
+			match = str.match(/request:\s+(\S+)/);
+		}
 		return match ? match[1] : 'unknown';
 	}
 
