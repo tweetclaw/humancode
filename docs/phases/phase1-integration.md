@@ -109,54 +109,13 @@ Phase 1 完成的只是**基础架构**，实际上：
 
 ---
 
-### Task F — 连接真实 AI Extension API
-
-**目标**：让 `onDidRelayMessage` 事件触发真实的 AI API 调用
-
-**背景**：
-目前 `relayMessage` 只是触发了一个事件，但没有实际的 AI 调用逻辑。需要在 Extension Host 中监听这个事件，并调用 AI Extension 的 API。
-
-**实现位置**：
-新建文件：`src/vs/workbench/contrib/aiTeam/browser/aiTeamExtensionBridge.ts`
-
-**实现要求**：
-
-1. **监听 `onDidRelayMessage` 事件**：
-   ```typescript
-   constructor(
-       @IAISessionManagerService private readonly sessionManager: IAISessionManagerService,
-       @IExtensionService private readonly extensionService: IExtensionService
-   ) {
-       this.sessionManager.onDidRelayMessage(({ request, prompt }) => {
-           this.handleRelayMessage(request, prompt);
-       });
-   }
-   ```
-
-2. **调用 AI Extension API**：
-   - 获取当前活跃的 AI Extension（Copilot、通义灵码等）
-   - 调用其 Chat API，传入构造好的 prompt
-   - 将响应记录到目标会话的历史中
-
-3. **错误处理**：
-   - 如果没有可用的 AI Extension，显示错误提示
-   - 如果 API 调用失败，更新会话状态为 'error'
-
-**验收标准**：
-- 点击"中继"按钮后，目标角色的卡片状态变为"工作中"
-- AI 响应后，目标角色的卡片显示新的消息摘要
-- 状态变回"空闲"
-
----
-
 ## 三、任务跟踪表
 
 | 任务编号 | 任务名称 | 开发 AI | 验收 AI | 依赖任务 | 状态 | 验收编号 | 验收状态 |
 |---------|---------|---------|---------|---------|------|---------|---------|
 | TASK-P1-TaskD | 验证 RPC 拦截是否工作 | AI-Dev-003 | AI-QA-003 | - | ✅ 已完成 | TEST-P1-TaskD | ✅ 通过 |
 | TASK-P1-TaskG | 连接 AI Team Panel 与 Session Manager | AI-Dev-002 | AI-QA-001 | TASK-P1-001, TASK-P1-002 | ✅ 已完成 | TEST-P1-TaskG | ✅ 通过 |
-| TASK-P1-TaskE | AI 会话配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | ⬜ 待开始 | TEST-P1-TaskE | ⬜ 待验收 |
-| TASK-P1-TaskF | 连接真实 AI Extension API | AI-Dev-002 | AI-QA-001 | TASK-P1-TaskG | ⬜ 待开始 | TEST-P1-TaskF | ⬜ 待验收 |
+| TASK-P1-TaskE | AI 会话配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | ✅ 已完成 | TEST-P1-TaskE | ✅ 通过 |
 
 **状态说明**：
 - ⬜ 待开始：任务尚未分配或开始
@@ -169,28 +128,33 @@ Phase 1 完成的只是**基础架构**，实际上：
 - [TASK-P1-TaskD](../tasks/TASK-P1-TaskD.md) / [TEST-P1-TaskD](../tasks/TEST-P1-TaskD.md)
 - [TASK-P1-TaskG](../tasks/TASK-P1-TaskG.md) / [TEST-P1-TaskG](../tasks/TEST-P1-TaskG.md)
 - [TASK-P1-TaskE](../tasks/TASK-P1-TaskE.md) / [TEST-P1-TaskE](../tasks/TEST-P1-TaskE.md)
-- [TASK-P1-TaskF](../tasks/TASK-P1-TaskF.md) / [TEST-P1-TaskF](../tasks/TEST-P1-TaskF.md)
 
 ---
 
 ## 四、并行开发规则
 
-**调整后的依赖关系**：
-```
-Task D (RPC 拦截验证) ✅ 已完成
-  ↓ 发现问题：Panel 未连接真实 Service
-  ↓
-Task G (连接 Panel 与 Service) ← 优先级最高，立即开始
-  ↓
-Task F (连接真实 AI API) ← 等 Task G 完成后开始
+Phase 1 集成阶段已完成。实际完成的任务:
+- ✅ Task D: RPC 拦截验证
+- ✅ Task G: 连接 Panel 与 Service
+- ✅ Task E: 配置持久化
 
-Task E (配置持久化) ← 可与 Task G 并行开发
-```
+**Task F 废弃说明**:
+Task F (连接真实 AI Extension API) 违背了 HumanCode 的核心架构原则。根据总设计文档,正确的架构是通过 RPC 消息拦截和上下文注入来实现多 AI 协作,而不是主动调用 AI Extension 的 API。
 
-**并行策略**：
-- Task G 和 Task E 可以并行开发（互不依赖）
-- Task F 必须等 Task G 完成后才能开始
-- Task D 已完成 RPC 拦截验证，上下文注入功能待 Task G 完成后重新验收
+正确的工作流程:
+```
+用户在通义灵码窗口输入
+    ↓
+HumanCodeRPCLogger.logOutgoing() 拦截
+    ↓
+注入当前 activeSessionId 的上下文
+    ↓
+通义灵码处理增强后的消息
+    ↓
+HumanCodeRPCLogger.logIncoming() 拦截响应
+    ↓
+记录到会话历史
+```
 
 ---
 
@@ -203,8 +167,8 @@ Task E (配置持久化) ← 可与 Task G 并行开发
 | 2026-03-24 | 发现问题：Panel 未连接真实 Service，拆分为 Task G | 📋 |
 | 2026-03-24 | 创建 Task G、Task E、Task F 任务卡 | ✅ |
 | 2026-03-24 | Task G：连接 Panel 与 Service | ✅ 已完成 |
-| - | Task E：配置持久化 | ⬜ 待开始 |
-| - | Task F：连接真实 AI Extension API | ⬜ 待开始 |
+| 2026-03-24 | Task E：配置持久化 | ✅ 已完成 |
+| 2026-03-24 | Phase 1 集成阶段完成 | ✅ |
 
 ---
 
@@ -232,6 +196,23 @@ Task E (配置持久化) ← 可与 Task G 并行开发
 - Task G 完成后重新验证 Task D 的上下文注入功能 ✅
 - 验证结果：activeSessionId 正确设置，上下文成功注入
 - Task D 现已完整通过验收
+
+### 问题 2：Task F 架构偏离
+
+**问题描述**：
+- Task F 设计为主动调用 AI Extension API (如 `tongyi.chat`, `github.copilot.chat`)
+- 这违背了 HumanCode 的核心架构原则："扩展保持黑盒,通过 RPC 消息层工作"
+- 猜测 API 接口会导致技术债务和脆弱性
+
+**解决方案**：
+- 废弃 Task F,不实施该功能
+- Phase 1 的正确完成范围: 虚拟会话管理、RPC 消息拦截与上下文注入、UI 面板、配置持久化
+- 用户通过现有 AI Extension UI 输入,HumanCodeRPCLogger 拦截并注入上下文
+
+**决策依据**：
+- 保持架构纯粹性,不破坏"扩展黑盒"原则
+- 避免为每个 AI Extension 维护 API 适配代码
+- 确保系统的可扩展性和稳定性
 
 ---
 
