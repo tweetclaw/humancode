@@ -54,6 +54,11 @@ export class AITeamPanel extends ViewPane {
 		this._register(this.sessionManagerService.onDidMessageAppend(({ sessionId }) => {
 			this.updateCardSummary(sessionId);
 		}));
+
+		// Subscribe to active session changes
+		this._register(this.sessionManagerService.onDidActiveSessionChange((sessionId) => {
+			this.updateActiveSessionUI(sessionId);
+		}));
 	}
 
 	protected override renderBody(container: HTMLElement): void {
@@ -289,11 +294,15 @@ export class AITeamPanel extends ViewPane {
 	private handleActivateSession(sessionId: string): void {
 		console.log('[AITeamPanel] handleActivateSession called with sessionId:', sessionId);
 
-		// Set as active session
+		// Set as active session (this will trigger onDidActiveSessionChange event)
 		this.sessionManagerService.setActiveSession(sessionId);
 		console.log('[AITeamPanel] setActiveSession called');
+	}
 
-		// Update visual state of all cards
+	/**
+	 * Update the visual state of all cards when active session changes
+	 */
+	private updateActiveSessionUI(sessionId: string | null): void {
 		if (!this.cardsContainer) {
 			return;
 		}
@@ -301,7 +310,7 @@ export class AITeamPanel extends ViewPane {
 		const allCards = this.cardsContainer.querySelectorAll('.ai-role-card');
 		allCards.forEach(card => {
 			if (card instanceof HTMLElement) {
-				if (card.dataset['sessionId'] === sessionId) {
+				if (sessionId && card.dataset['sessionId'] === sessionId) {
 					card.classList.add('active');
 				} else {
 					card.classList.remove('active');

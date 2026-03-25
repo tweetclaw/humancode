@@ -223,4 +223,10 @@ export interface IAISessionManagerService {
 	 * HumanCodeRPCLogger 和 AI Team Panel 监听此事件执行实际的消息发送。
 	 */
 	readonly onDidRelayMessage: Event<{ request: IRelayRequest; prompt: string }>;
+
+	/**
+	 * 当活跃会话发生变化时触发。
+	 * AI Team Panel 监听此事件更新选中状态。
+	 */
+	readonly onDidActiveSessionChange: Event<string | null>;
 }

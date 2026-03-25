@@ -64,6 +64,9 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 	private readonly _onDidRelayMessage = this._register(new Emitter<{ request: IRelayRequest; prompt: string }>());
 	public readonly onDidRelayMessage: Event<{ request: IRelayRequest; prompt: string }> = this._onDidRelayMessage.event;
 
+	private readonly _onDidActiveSessionChange = this._register(new Emitter<string | null>());
+	public readonly onDidActiveSessionChange: Event<string | null> = this._onDidActiveSessionChange.event;
+
 	// ── 持久化存储 ────────────────────────────────────────────
 	private static readonly STORAGE_KEY = 'aiSessionManager.sessions';
 
@@ -159,10 +162,12 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 		}
 		this._activeSessionId = sessionId;
 		console.log('[AISessionManagerService] activeSessionId updated to:', this._activeSessionId);
+		this._onDidActiveSessionChange.fire(sessionId);
 	}
 
 	clearActiveSession(): void {
 		this._activeSessionId = null;
+		this._onDidActiveSessionChange.fire(null);
 	}
 
 	// ── 消息管理 ──────────────────────────────────────────────
