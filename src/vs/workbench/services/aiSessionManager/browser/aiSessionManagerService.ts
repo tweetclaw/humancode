@@ -68,7 +68,9 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 	public readonly onDidActiveSessionChange: Event<string | null> = this._onDidActiveSessionChange.event;
 
 	// ── 持久化存储 ────────────────────────────────────────────
-	private static readonly STORAGE_KEY = 'aiSessionManager.sessions';
+	private static readonly STORAGE_KEY_SESSIONS = 'humancode.sessions';
+	private static readonly STORAGE_KEY_ACTIVE_SESSION = 'humancode.activeSession';
+	private static readonly STORAGE_KEY_CONVERSATIONS = 'humancode.conversations';
 
 	constructor(
 		@IStorageService private readonly _storageService: IStorageService
@@ -163,11 +165,13 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 		this._activeSessionId = sessionId;
 		console.log('[AISessionManagerService] activeSessionId updated to:', this._activeSessionId);
 		this._onDidActiveSessionChange.fire(sessionId);
+		this._saveActiveSession();
 	}
 
 	clearActiveSession(): void {
 		this._activeSessionId = null;
 		this._onDidActiveSessionChange.fire(null);
+		this._saveActiveSession();
 	}
 
 	// ── 消息管理 ──────────────────────────────────────────────
@@ -198,6 +202,7 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 
 		this._sessions.set(sessionId, updatedSession);
 		this._onDidMessageAppend.fire({ sessionId, message: fullMessage });
+		this._saveConversations();
 	}
 
 	getSessionContext(sessionId: string, maxMessages: number = 20): string {
@@ -312,20 +317,32 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 	private _loadSessions(): void {
 		try {
 			const stored = this._storageService.get(
-				AISessionManagerService.STORAGE_KEY,
+				AISessionManagerService.STORAGE_KEY_SESSIONS,
 				StorageScope.WORKSPACE
 			);
 
 			if (stored) {
 				const sessions: ISerializableSessionContext[] = JSON.parse(stored);
 				sessions.forEach(session => {
-					// 恢复会话，但历史消息为空（不持久化历史消息）
+					// 恢复会话，历史消息单独加载
 					const fullSession: ISessionContext = {
 						...session,
 						conversationHistory: []
 					};
 					this._sessions.set(session.sessionId, fullSession);
 				});
+			}
+
+			// 加载对话历史
+			this._loadConversations();
+
+			// 加载活跃会话 ID
+			const activeId = this._storageService.get(
+				AISessionManagerService.STORAGE_KEY_ACTIVE_SESSION,
+				StorageScope.WORKSPACE
+			);
+			if (activeId && this._sessions.has(activeId)) {
+				this._activeSessionId = activeId;
 			}
 		} catch (error) {
 			// 加载失败不阻塞服务启动，仅记录错误
@@ -351,7 +368,7 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 			}));
 
 			this._storageService.store(
-				AISessionManagerService.STORAGE_KEY,
+				AISessionManagerService.STORAGE_KEY_SESSIONS,
 				JSON.stringify(sessions),
 				StorageScope.WORKSPACE,
 				StorageTarget.USER
@@ -359,6 +376,80 @@ export class AISessionManagerService extends Disposable implements IAISessionMan
 		} catch (error) {
 			// 保存失败不影响内存中的会话状态，仅记录错误
 			console.error('[AISessionManagerService] Failed to save sessions:', error);
+		}
+	}
+
+	/**
+	 * 保存活跃会话 ID
+	 */
+	private _saveActiveSession(): void {
+		try {
+			if (this._activeSessionId) {
+				this._storageService.store(
+					AISessionManagerService.STORAGE_KEY_ACTIVE_SESSION,
+					this._activeSessionId,
+					StorageScope.WORKSPACE,
+					StorageTarget.USER
+				);
+			} else {
+				this._storageService.remove(
+					AISessionManagerService.STORAGE_KEY_ACTIVE_SESSION,
+					StorageScope.WORKSPACE
+				);
+			}
+		} catch (error) {
+			console.error('[AISessionManagerService] Failed to save active session:', error);
+		}
+	}
+
+	/**
+	 * 加载所有会话的对话历史
+	 */
+	private _loadConversations(): void {
+		try {
+			const stored = this._storageService.get(
+				AISessionManagerService.STORAGE_KEY_CONVERSATIONS,
+				StorageScope.WORKSPACE
+			);
+
+			if (stored) {
+				const conversations: Record<string, IMessage[]> = JSON.parse(stored);
+				for (const [sessionId, messages] of Object.entries(conversations)) {
+					const session = this._sessions.get(sessionId);
+					if (session) {
+						const updatedSession: ISessionContext = {
+							...session,
+							conversationHistory: messages
+						};
+						this._sessions.set(sessionId, updatedSession);
+					}
+				}
+			}
+		} catch (error) {
+			console.error('[AISessionManagerService] Failed to load conversations:', error);
+		}
+	}
+
+	/**
+	 * 保存所有会话的对话历史
+	 */
+	private _saveConversations(): void {
+		try {
+			const conversations: Record<string, IMessage[]> = {};
+			for (const [sessionId, session] of this._sessions.entries()) {
+				if (session.conversationHistory.length > 0) {
+					conversations[sessionId] = session.conversationHistory as IMessage[];
+				}
+			}
+
+			this._storageService.store(
+				AISessionManagerService.STORAGE_KEY_CONVERSATIONS,
+				JSON.stringify(conversations),
+				StorageScope.WORKSPACE,
+				StorageTarget.USER
+			);
+		} catch (error) {
+			console.error('[AISessionManagerService] Failed to save conversations:', error);
 		}
 	}
 }

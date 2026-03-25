@@ -15,6 +15,8 @@ import { IAISessionManagerService } from '../../../services/aiSessionManager/com
 import { AISessionManagerService } from '../../../services/aiSessionManager/browser/aiSessionManagerService.js';
 import { IMessageHubService } from '../common/messageHub.js';
 import { MessageHubService } from './messageHubService.js';
+import { IContextLibraryService } from '../../../services/aiContext/common/contextLibrary.js';
+import { ContextLibraryService } from '../../../services/aiContext/browser/contextLibraryService.js';
 import { Codicon } from '../../../../base/common/codicons.js';
 
 // Register AI Session Manager Service
@@ -22,6 +24,9 @@ registerSingleton(IAISessionManagerService, AISessionManagerService, Instantiati
 
 // Register Message Hub Service
 registerSingleton(IMessageHubService, MessageHubService, InstantiationType.Delayed);
+
+// Register Context Library Service
+registerSingleton(IContextLibraryService, ContextLibraryService, InstantiationType.Delayed);
 
 // Register view container in Sidebar
 const VIEW_CONTAINER = Registry.as<IViewContainersRegistry>(ViewContainerExtensions.ViewContainersRegistry)

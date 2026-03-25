@@ -13,6 +13,7 @@ import {
 	MessageDirection
 } from '../common/messageHub.js';
 import { IAISessionManagerService } from '../../../services/aiSessionManager/common/aiSessionManager.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
 
 export class MessageHubService extends Disposable implements IMessageHubService {
 
@@ -26,10 +27,16 @@ export class MessageHubService extends Disposable implements IMessageHubService 
 	private readonly _onDidForwardMessage = this._register(new Emitter<{ originalMessage: IMessageRecord; targetSessionId: string }>());
 	public readonly onDidForwardMessage: Event<{ originalMessage: IMessageRecord; targetSessionId: string }> = this._onDidForwardMessage.event;
 
+	private static readonly STORAGE_KEY_MESSAGES = 'humancode.messages';
+
 	constructor(
-		@IAISessionManagerService private readonly sessionManagerService: IAISessionManagerService
+		@IAISessionManagerService private readonly sessionManagerService: IAISessionManagerService,
+		@IStorageService private readonly storageService: IStorageService
 	) {
 		super();
+
+		// Load messages from storage
+		this._loadMessages();
 
 		// Listen to message append events from session manager
 		this._register(this.sessionManagerService.onDidMessageAppend(({ sessionId, message }) => {
@@ -89,6 +96,7 @@ export class MessageHubService extends Disposable implements IMessageHubService 
 
 		this._messages.push(fullMessage);
 		this._onDidAddMessage.fire(fullMessage);
+		this._saveMessages();
 
 		return id;
 	}
@@ -123,9 +131,45 @@ export class MessageHubService extends Disposable implements IMessageHubService 
 
 	clearAllMessages(): void {
 		this._messages.length = 0;
+		this._saveMessages();
 	}
 
 	private generateMessageId(): string {
 		return `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+	}
+
+	/**
+	 * Load messages from storage
+	 */
+	private _loadMessages(): void {
+		try {
+			const stored = this.storageService.get(
+				MessageHubService.STORAGE_KEY_MESSAGES,
+				StorageScope.WORKSPACE
+			);
+
+			if (stored) {
+				const messages: IMessageRecord[] = JSON.parse(stored);
+				this._messages.push(...messages);
+			}
+		} catch (error) {
+			console.error('[MessageHubService] Failed to load messages:', error);
+		}
+	}
+
+	/**
+	 * Save messages to storage
+	 */
+	private _saveMessages(): void {
+		try {
+			this.storageService.store(
+				MessageHubService.STORAGE_KEY_MESSAGES,
+				JSON.stringify(this._messages),
+				StorageScope.WORKSPACE,
+				StorageTarget.USER
+			);
+		} catch (error) {
+			console.error('[MessageHubService] Failed to save messages:', error);
+		}
 	}
 }
