@@ -538,8 +538,8 @@ HumanCode: 用户
 
 **示例：TASK-P1-005 配置持久化**
 
-开发任务卡位置：`docs/tasks/TASK-P1-005.md`
-验收任务卡位置：`docs/tasks/TEST-P1-005.md`
+开发任务卡位置：`docs/tasks/phase1/TASK-P1-005.md`
+验收任务卡位置：`docs/tasks/phase1/TEST-P1-005.md`
 
 这两个文件应该在任务分配时同时创建，确保开发 AI 和验收 AI 都有明确的工作指引。
 
@@ -560,11 +560,11 @@ HumanCode: 用户
 | 文档 | 更新时机 | 内容 |
 |------|---------|------|
 | `docs/phases/phaseN.md` | 创建任务时 | 在任务跟踪表中添加新任务行 |
-| `docs/tasks/TASK-PN-XXX.md` | 创建任务时 | 创建开发任务卡 |
-| `docs/tasks/TEST-PN-XXX.md` | 创建任务时 | 创建验收任务卡 |
+| `docs/tasks/phaseN/TASK-PN-XXX.md` | 创建任务时 | 创建开发任务卡 |
+| `docs/tasks/phaseN/TEST-PN-XXX.md` | 创建任务时 | 创建验收任务卡 |
 | `docs/phases/phaseN.md` | 任务状态变更时 | 更新任务跟踪表中的状态列 |
-| `docs/tasks/TASK-PN-XXX.md` | 开发完成时 | 填写"实施记录"区域 |
-| `docs/tasks/TEST-PN-XXX.md` | 验收完成时 | 填写"验收结果"区域 |
+| `docs/tasks/phaseN/TASK-PN-XXX.md` | 开发完成时 | 填写"实施记录"区域 |
+| `docs/tasks/phaseN/TEST-PN-XXX.md` | 验收完成时 | 填写"验收结果"区域 |
 | `docs/HumanCode-全面改造总设计文档.md` | 阶段完成时 | 更新"开发进展追踪"章节的状态 |
 
 ### 5.3 任务状态转换规则
@@ -817,7 +817,7 @@ HumanCode: 用户
 
 收到任务分配后：
 
-- [ ] 1. 阅读开发任务卡 `docs/tasks/TASK-PN-XXX.md`
+- [ ] 1. 阅读开发任务卡 `docs/tasks/phaseN/TASK-PN-XXX.md`
 - [ ] 2. 阅读任务卡中列出的"必须先阅读的文件"
 - [ ] 3. 理解任务背景、目标和实现要求
 - [ ] 4. 在任务跟踪表中将任务状态改为 🏗️ 进行中
@@ -831,8 +831,8 @@ HumanCode: 用户
 
 收到验收通知后：
 
-- [ ] 1. 阅读验收任务卡 `docs/tasks/TEST-PN-XXX.md`
-- [ ] 2. 阅读对应的开发任务卡 `docs/tasks/TASK-PN-XXX.md`
+- [ ] 1. 阅读验收任务卡 `docs/tasks/phaseN/TEST-PN-XXX.md`
+- [ ] 2. 阅读对应的开发任务卡 `docs/tasks/phaseN/TASK-PN-XXX.md`
 - [ ] 3. 确认开发 AI 已标记任务为"待验收"
 - [ ] 4. 在任务跟踪表中将验收状态改为 🔍 验收中
 - [ ] 5. 按照验收步骤逐项检查

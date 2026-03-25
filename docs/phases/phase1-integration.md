@@ -125,9 +125,9 @@ Phase 1 完成的只是**基础架构**，实际上：
 - ❌ 验收失败：验收未通过，需要修复
 
 **任务卡位置**：
-- [TASK-P1-TaskD](../tasks/TASK-P1-TaskD.md) / [TEST-P1-TaskD](../tasks/TEST-P1-TaskD.md)
-- [TASK-P1-TaskG](../tasks/TASK-P1-TaskG.md) / [TEST-P1-TaskG](../tasks/TEST-P1-TaskG.md)
-- [TASK-P1-TaskE](../tasks/TASK-P1-TaskE.md) / [TEST-P1-TaskE](../tasks/TEST-P1-TaskE.md)
+- [TASK-P1-TaskD](../tasks/phase1/TASK-P1-TaskD.md) / [TEST-P1-TaskD](../tasks/phase1/TEST-P1-TaskD.md)
+- [TASK-P1-TaskG](../tasks/phase1/TASK-P1-TaskG.md) / [TEST-P1-TaskG](../tasks/phase1/TEST-P1-TaskG.md)
+- [TASK-P1-TaskE](../tasks/phase1/TASK-P1-TaskE.md) / [TEST-P1-TaskE](../tasks/phase1/TEST-P1-TaskE.md)
 
 ---
 

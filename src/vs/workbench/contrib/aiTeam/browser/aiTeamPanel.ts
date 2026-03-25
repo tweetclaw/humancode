@@ -76,6 +76,9 @@ export class AITeamPanel extends ViewPane {
 
 		// Initial render
 		this.refreshCards();
+
+		// Set default selection to PM if no active session
+		this.setDefaultSelection();
 	}
 
 	private refreshCards(): void {
@@ -89,6 +92,9 @@ export class AITeamPanel extends ViewPane {
 		for (const session of sessions) {
 			this.renderCard(session);
 		}
+
+		// Set default selection after refresh if no active session
+		this.setDefaultSelection();
 	}
 
 	private renderCard(session: ISessionContext): void {
@@ -356,6 +362,36 @@ export class AITeamPanel extends ViewPane {
 			toSessionId: selected.sessionId,
 			relayType: 'review'
 		});
+	}
+
+	/**
+	 * Set default selection to Project Manager (PM) if no active session exists
+	 */
+	private setDefaultSelection(): void {
+		// Only set default if there's no active session
+		const activeSessionId = this.sessionManagerService.getActiveSessionId();
+		if (activeSessionId) {
+			return;
+		}
+
+		const sessions = this.sessionManagerService.getAllSessions();
+		if (sessions.length === 0) {
+			return;
+		}
+
+		// Find PM session (项目经理 or PM)
+		const pmSession = sessions.find(s =>
+			s.role.toLowerCase().includes('项目经理') ||
+			s.role.toLowerCase().includes('pm') ||
+			s.name.toLowerCase().includes('pm')
+		);
+
+		if (pmSession) {
+			this.handleActivateSession(pmSession.sessionId);
+		} else {
+			// If no PM, select the first session
+			this.handleActivateSession(sessions[0].sessionId);
+		}
 	}
 
 	private getRandomColor(): string {
