@@ -98,6 +98,7 @@ import { IExtHostStorage } from './extHostStorage.js';
 import { IExtensionStoragePaths } from './extHostStoragePaths.js';
 import { IExtHostTask } from './extHostTask.js';
 import { ExtHostTelemetryLogger, IExtHostTelemetry, isNewAppInstall } from './extHostTelemetry.js';
+import { ExtHostTestAiInterop } from './extHostTestAiInterop.js';
 import { IExtHostTerminalService } from './extHostTerminalService.js';
 import { IExtHostTerminalShellIntegration } from './extHostTerminalShellIntegration.js';
 import { IExtHostTesting } from './extHostTesting.js';
@@ -249,6 +250,7 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 	const extHostSpeech = rpcProtocol.set(ExtHostContext.ExtHostSpeech, new ExtHostSpeech(rpcProtocol));
 	const extHostEmbeddings = rpcProtocol.set(ExtHostContext.ExtHostEmbeddings, new ExtHostEmbeddings(rpcProtocol));
 	const extHostBrowsers = rpcProtocol.set(ExtHostContext.ExtHostBrowsers, new ExtHostBrowsers(rpcProtocol));
+	const extHostTestAiInterop = rpcProtocol.set(ExtHostContext.ExtHostTestAiInterop, new ExtHostTestAiInterop(rpcProtocol));
 
 	rpcProtocol.set(ExtHostContext.ExtHostMcp, accessor.get(IExtHostMpcService));
 
@@ -1837,8 +1839,33 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			}
 		};
 
+		// Expose test API for internal testing (not part of public API)
+		// This allows test extensions to access the RPC test infrastructure
+		const testAiInterop = {
+			onInvoke: extHostTestAiInterop.onInvoke,
+			sendChunk: (invocationId: string, seq: number, text: string) => {
+				return extHostTestAiInterop.sendChunk(invocationId, seq, text);
+			},
+			invoke: (invocationId: string) => {
+				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
+				return (mainThreadProxy as any).invoke(invocationId);
+			},
+			onDidReceiveChunk: (...args: any[]) => {
+				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
+				return (mainThreadProxy as any).onDidReceiveChunk(...args);
+			},
+			getStats: (invocationId: string) => {
+				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
+				return (mainThreadProxy as any).getStats(invocationId);
+			},
+			clearStats: () => {
+				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
+				return (mainThreadProxy as any).clearStats();
+			}
+		};
+
 		// eslint-disable-next-line local/code-no-dangerous-type-assertions
-		return <typeof vscode>{
+		const api = <typeof vscode>{
 			version: initData.version,
 			// namespaces
 			ai,
@@ -2185,5 +2212,10 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			ChatTodoStatus: extHostTypes.ChatTodoStatus,
 			ChatDebugSubagentStatus: extHostTypes.ChatDebugSubagentStatus,
 		};
+
+		// Attach test API to the vscode object for internal testing
+		(api as any).testAiInterop = testAiInterop;
+
+		return api;
 	};
 }

@@ -1762,6 +1762,10 @@ export interface ExtHostUrlsShape {
 	$handleExternalUri(handle: number, uri: UriComponents): Promise<void>;
 }
 
+export interface ExtHostTestAiInteropShape {
+	$onInvoke(invocationId: string): void;
+}
+
 export interface MainThreadUriOpenersShape extends IDisposable {
 	$registerUriOpener(id: string, schemes: readonly string[], extensionId: ExtensionIdentifier, label: string): Promise<void>;
 	$unregisterUriOpener(id: string): Promise<void>;
@@ -2120,6 +2124,10 @@ export interface MainThreadTimelineShape extends IDisposable {
 	$registerTimelineProvider(provider: TimelineProviderDescriptor): void;
 	$unregisterTimelineProvider(source: string): void;
 	$emitTimelineChangeEvent(e: TimelineChangeEvent | undefined): void;
+}
+
+export interface MainThreadTestAiInteropShape extends IDisposable {
+	$acceptChunk(invocationId: string, seq: number, text: string): void;
 }
 
 export interface HoverWithId extends languages.Hover {
@@ -3814,6 +3822,7 @@ export const MainContext = {
 	MainThreadChatContext: createProxyIdentifier<MainThreadChatContextShape>('MainThreadChatContext'),
 	MainThreadChatDebug: createProxyIdentifier<MainThreadChatDebugShape>('MainThreadChatDebug'),
 	MainThreadBrowsers: createProxyIdentifier<MainThreadBrowsersShape>('MainThreadBrowsers'),
+	MainThreadTestAiInterop: createProxyIdentifier<MainThreadTestAiInteropShape>('MainThreadTestAiInterop'),
 };
 
 export const ExtHostContext = {
@@ -3895,4 +3904,5 @@ export const ExtHostContext = {
 	ExtHostChatSessions: createProxyIdentifier<ExtHostChatSessionsShape>('ExtHostChatSessions'),
 	ExtHostGitExtension: createProxyIdentifier<ExtHostGitExtensionShape>('ExtHostGitExtension'),
 	ExtHostBrowsers: createProxyIdentifier<ExtHostBrowsersShape>('ExtHostBrowsers'),
+	ExtHostTestAiInterop: createProxyIdentifier<ExtHostTestAiInteropShape>('ExtHostTestAiInterop'),
 };

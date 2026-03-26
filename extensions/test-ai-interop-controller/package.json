@@ -1,0 +1,32 @@
+{
+	"name": "test-ai-interop-controller",
+	"displayName": "Test AI Interop Controller",
+	"description": "Controller extension for testing AI Interop RPC streaming performance",
+	"version": "0.0.1",
+	"publisher": "vscode",
+	"private": true,
+	"engines": {
+		"vscode": "^1.99.0"
+	},
+	"activationEvents": [
+		"onStartupFinished"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"commands": [
+			{
+				"command": "test-ai-interop.runTest",
+				"title": "Run AI Interop RPC Test"
+			}
+		]
+	},
+	"scripts": {
+		"compile": "tsc -p ./",
+		"watch": "tsc -watch -p ./"
+	},
+	"devDependencies": {
+		"@types/node": "20.x",
+		"@types/vscode": "^1.99.0",
+		"typescript": "^5.6.2"
+	}
+}

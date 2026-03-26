@@ -54,49 +54,71 @@ HumanCode 是基于 VS Code 深度改造的多 AI 协作 IDE。核心突破：
 
 HumanCode: 用户
              ↕
-         [消息路由中枢]  ← 我们开发的核心
+      [AI Interop Bus]  ← 平台级协作中枢
         /      |      \
-   AI角色A  AI角色B  AI角色C
+   AI扩展A  AI扩展B  AI扩展C
   (Copilot) (Lingma) (自定义)
 ```
 
-**关键突破**：扩展本身保持单实例、黑盒不变，我们在 IDE 消息层面实现"虚拟多实例"，通过上下文注入让同一个扩展表现出多个独立 AI 程序员的效果。
+**关键突破**：在 Workbench 层建立平台级 AI Interop 能力，通过标准化的 endpoint 注册、invocation 路由、流式传输、权限控制和审计机制，让多个 AI 扩展可以安全、可控地协作。
 
-### 2.3 四层架构
+### 2.3 五层架构
 
 | 层级 | 名称 | 核心功能 |
 |------|------|---------|
-| Layer 1 | 用户界面层 | AI Team Commander Panel、Extension Messages View、上下文管理面板 |
-| Layer 2 | 消息路由中枢 | IAISessionManagerService、IExtensionMessagesService |
-| Layer 3 | 扩展管理层 | ExtensionHostManager、HumanCodeRPCLogger（拦截+注入） |
-| Layer 4 | 扩展主机层 | GitHub Copilot、通义灵码等 AI 扩展（黑盒，不修改） |
+| Layer 1 | AI Interop Bus | endpoint 注册、invocation 路由、流式传输、cancel/timeout |
+| Layer 2 | AI Session Broker | session 管理、participant 管理、上下文关联 |
+| Layer 3 | Permission & Policy | 权限控制、授权决策、跨扩展调用审批 |
+| Layer 4 | Adapter Layer | 复用 Chat/Tool/MCP/Command 生态 |
+| Layer 5 | Audit & Observability | 结构化事件记录、调试视图、性能监控 |
 
 ---
 
 ## 三、项目进展：我们在哪里？
 
-**项目进展和任务状态请查看**: [任务跟踪总表](任务跟踪总表.md)
+### 3.1 当前阶段
 
-任务跟踪总表包含:
-- 所有阶段的任务状态汇总
-- AI 角色分配表
-- 项目里程碑
-- 关键问题记录
-- 更新日志
+项目当前处于 **PoC-0 技术预研阶段**，需要验证三个关键技术点：
 
-### 3.1 关键文件位置
+1. **RPC 流式传输性能**：验证 VS Code RPC 机制能否承载高频流式 AI chunk 传输
+2. **CancellationToken 穿透**：验证 cancel 信号能否从 controller 扩展穿透到 worker 扩展
+3. **跨 Host 路由与隔离**：验证平台能否正确识别和路由不同 Extension Host 的调用
 
-**Phase 1 核心代码文件**:
-- 接口定义: `src/vs/workbench/services/aiSessionManager/common/aiSessionManager.ts`
-- Service 实现: `src/vs/workbench/services/aiSessionManager/browser/aiSessionManagerService.ts`
-- UI Panel: `src/vs/workbench/contrib/aiTeam/browser/aiTeamPanel.ts`
-- RPC Logger: `src/vs/workbench/services/extensions/common/extensionHostManager.ts`
+**只有 PoC-0 全部通过，才能进入后续正式开发阶段。**
 
-**阶段文档**:
-- Phase 0: [docs/phases/phase0.md](phases/phase0.md)
-- Phase 1: [docs/phases/phase1.md](phases/phase1.md)
-- Phase 1 集成: [docs/phases/phase1-integration.md](phases/phase1-integration.md)
-- Phase 2: [docs/phases/phase2.md](phases/phase2.md)
+### 3.2 关键文档位置
+
+**AI Interop 核心文档**:
+- 执行摘要: [docs/ai-interop/01-executive-summary-and-scope.md](../ai-interop/01-executive-summary-and-scope.md)
+- 核心架构: [docs/ai-interop/02-core-architecture.md](../ai-interop/02-core-architecture.md)
+- RPC 协议规范: [docs/ai-interop/03-rpc-and-dto-spec.md](../ai-interop/03-rpc-and-dto-spec.md)
+- Session 状态机: [docs/ai-interop/04-session-state-machine.md](../ai-interop/04-session-state-machine.md)
+- 权限与安全: [docs/ai-interop/05-permission-and-security.md](../ai-interop/05-permission-and-security.md)
+- Adapter 策略: [docs/ai-interop/06-adapter-strategy.md](../ai-interop/06-adapter-strategy.md)
+- 测试与验收: [docs/ai-interop/07-test-and-acceptance.md](../ai-interop/07-test-and-acceptance.md)
+- 开发手册: [docs/ai-interop/08-development-playbook.md](../ai-interop/08-development-playbook.md)
+
+**技术预研文档**:
+- PoC-0 验证计划: [docs/ai-interop/00-poc-0-technical-validation.md](../ai-interop/00-poc-0-technical-validation.md)
+
+### 3.3 核心代码落点
+
+**Services 层**:
+- `src/vs/workbench/services/aiInterop/common/aiInterop.ts` - 接口定义与 DTO
+- `src/vs/workbench/services/aiInterop/browser/aiInteropService.ts` - AI Interop Bus 实现
+- `src/vs/workbench/services/aiInterop/browser/aiSessionBroker.ts` - Session Broker 实现
+- `src/vs/workbench/services/aiInterop/browser/aiInteropPolicyService.ts` - 权限策略服务
+- `src/vs/workbench/services/aiInterop/browser/aiInteropAuditService.ts` - 审计服务
+
+**API Bridge 层**:
+- `src/vs/workbench/api/browser/mainThreadAiInterop.ts` - 主线程 RPC customer
+- `src/vs/workbench/api/common/extHostAiInterop.ts` - ExtHost API 实现
+- `src/vs/workbench/api/common/extHost.protocol.ts` - RPC Shape 定义
+
+**Contrib UI 层**:
+- `src/vs/workbench/contrib/aiInterop/browser/aiInterop.contribution.ts` - UI 注册
+- `src/vs/workbench/contrib/aiInterop/browser/aiInteropAuditView.ts` - 审计视图
+- `src/vs/workbench/contrib/aiInterop/browser/aiInteropPermissionsView.ts` - 权限视图
 
 ---
 
@@ -534,14 +556,14 @@ HumanCode: 用户
 
 ### 4.6 完整示例：从任务卡到验收卡
 
-参考 [docs/phases/phase1-task-prompts.md](phases/phase1-task-prompts.md) 查看 Phase 1 的完整任务提示词。
+**示例：TASK-POC0-001 RPC 流式传输验证**
 
-**示例：TASK-P1-005 配置持久化**
-
-开发任务卡位置：`docs/tasks/phase1/TASK-P1-005.md`
-验收任务卡位置：`docs/tasks/phase1/TEST-P1-005.md`
+开发任务卡位置：`docs/tasks/poc0/TASK-POC0-001.md`
+验收任务卡位置：`docs/tasks/poc0/TEST-POC0-001.md`
 
 这两个文件应该在任务分配时同时创建，确保开发 AI 和验收 AI 都有明确的工作指引。
+
+参考 [docs/ai-interop/00-poc-0-technical-validation.md](../ai-interop/00-poc-0-technical-validation.md) 了解当前阶段的技术验证要求。
 
 ---
 
@@ -582,32 +604,32 @@ HumanCode: 用户
 
 **初始状态**（项目经理创建任务）：
 ```markdown
-| TASK-P1-005 | 配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | ⬜ 待开始 | TEST-P1-005 | ⬜ 待验收 |
+| TASK-POC0-001 | RPC 流式传输验证 | AI-Dev-001 | AI-QA-002 | - | ⬜ 待开始 | TEST-POC0-001 | ⬜ 待验收 |
 ```
 
 **开发 AI 开始工作**：
 ```markdown
-| TASK-P1-005 | 配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | 🏗️ 进行中 | TEST-P1-005 | ⬜ 待验收 |
+| TASK-POC0-001 | RPC 流式传输验证 | AI-Dev-001 | AI-QA-002 | - | 🏗️ 进行中 | TEST-POC0-001 | ⬜ 待验收 |
 ```
 
 **开发 AI 完成并提交验收**：
 ```markdown
-| TASK-P1-005 | 配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | ⏸️ 待验收 | TEST-P1-005 | ⬜ 待验收 |
+| TASK-POC0-001 | RPC 流式传输验证 | AI-Dev-001 | AI-QA-002 | - | ⏸️ 待验收 | TEST-POC0-001 | ⬜ 待验收 |
 ```
 
 **验收 AI 开始验收**：
 ```markdown
-| TASK-P1-005 | 配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | ⏸️ 待验收 | TEST-P1-005 | 🔍 验收中 |
+| TASK-POC0-001 | RPC 流式传输验证 | AI-Dev-001 | AI-QA-002 | - | ⏸️ 待验收 | TEST-POC0-001 | 🔍 验收中 |
 ```
 
 **验收通过**：
 ```markdown
-| TASK-P1-005 | 配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | ✅ 已完成 | TEST-P1-005 | ✅ 通过 |
+| TASK-POC0-001 | RPC 流式传输验证 | AI-Dev-001 | AI-QA-002 | - | ✅ 已完成 | TEST-POC0-001 | ✅ 通过 |
 ```
 
 **验收失败**：
 ```markdown
-| TASK-P1-005 | 配置持久化 | AI-Dev-001 | AI-QA-002 | TASK-P1-001 | ❌ 验收失败 | TEST-P1-005 | ❌ 失败 |
+| TASK-POC0-001 | RPC 流式传输验证 | AI-Dev-001 | AI-QA-002 | - | ❌ 验收失败 | TEST-POC0-001 | ❌ 失败 |
 ```
 
 ### 5.5 问题记录格式
@@ -633,33 +655,37 @@ HumanCode: 用户
 
 ## 六、如何协调并行开发？
 
-### 6.1 并行开发策略（Phase 1 经验）
+### 6.1 并行开发策略（PoC-0 经验）
 
-**接口先行 + 垂直切片**：
-1. 在所有开发开始之前，**精确定义接口契约**
-2. 三条任务线沿接口边界**并行推进**
-3. 各任务独立可验收，最后**一次集成**
+**技术验证优先 + 独立验证点**：
+1. 在正式开发之前，**先验证核心技术可行性**
+2. 三个验证点可以**并行进行**，互不依赖
+3. 各验证点独立可验收，有明确的通过/失败标准
 
 ```
-接口契约文件（已完成）
+PoC-0 技术预研（并行）
         │
-        ├── Task A：Service 实现（纯逻辑，不依赖 UI）
-        ├── Task B：UI Panel 开发（使用 Mock Service 驱动）
-        └── Task C：RPC Logger 增强（只依赖接口签名）
+        ├── 验证点 1：RPC 流式传输性能（3-5 天）
+        ├── 验证点 2：CancellationToken 穿透（2-3 天）
+        └── 验证点 3：跨 Host 路由与隔离（3-4 天）
               ↓
-        集成联调：替换 Mock → 端到端验收测试
+        Go/No-Go 决策：全部通过才进入正式开发
 ```
 
 ### 6.2 并行边界规则
 
-⚠️ **接口契约是并行开发的唯一边界**。中途不得修改接口签名。
-确需修改时，必须所有任务暂停，统一调整后继续。
+⚠️ **验证标准是并行开发的唯一边界**。每个验证点必须有明确的通过标准：
+
+- **RPC 流式传输**：100 chunk 无丢失，p95 延迟 < 100ms，无 UI 卡顿
+- **Cancel 穿透**：200ms 内生效，100% 成功率
+- **跨 Host 路由**：匹配时成功，错配时拒绝，错误码准确
 
 ### 6.3 依赖关系管理
 
-- 使用 Mock Service 解耦 UI 和 Service 的开发依赖
-- 明确标注任务间的依赖关系（如"Task D 必须在 Task A/B/C 完成后开始"）
-- 优先完成无依赖的任务，最大化并行度
+- 三个验证点完全独立，可由不同开发者并行实现
+- 每个验证点使用独立的测试扩展，互不干扰
+- 明确标注验证点的优先级（RPC 流式传输为最高优先级）
+- 只有全部验证点通过，才能进入下一阶段
 
 ---
 
@@ -670,34 +696,42 @@ HumanCode: 用户
 | 层级 | 验收方式 | 示例 |
 |------|---------|------|
 | **单元验收** | 代码逻辑正确，TypeScript 编译通过 | `npm run compile-check-ts-native` 无错误 |
-| **功能验收** | 功能按预期工作，有可观测的输出 | 在 Extension Messages View 中看到拦截的消息 |
-| **集成验收** | 多个模块协同工作，端到端流程打通 | 创建角色 → 发送任务 → 收到响应 → 状态更新 |
-| **用户验收** | 用户可以通过 UI 完成完整工作流 | 通过 UI 完成"需求 → 前端实现 → QA 测试"全流程 |
+| **功能验收** | 功能按预期工作，有可观测的输出 | 测试扩展成功注册 endpoint 并接收调用 |
+| **集成验收** | 多个模块协同工作，端到端流程打通 | Controller 扩展 → Bus 路由 → Worker 扩展 → 流式返回 |
+| **性能验收** | 性能指标达到预设标准 | p95 延迟 < 100ms，无 UI 卡顿 |
 
-### 7.2 Phase 1 端到端验收标准
+### 7.2 PoC-0 验收标准
 
-| 验收项 | 操作步骤 | 预期结果 |
+| 验证点 | 验收指标 | 通过标准 |
 |-------|---------|---------|
-| **会话隔离** | 创建"前端"和"后端"两个角色，各问"你是谁？" | 两个角色回答内容明显不同 |
-| **上下文连续** | 同一角色先说"用React开发"，再问"帮我写个按钮" | 响应中自动使用 React 语法 |
-| **消息中继** | 前端角色完成任务后，点击"中继给QA" | QA 角色收到消息，内容含前端输出 |
-| **状态同步** | 向角色发送任务，观察卡片状态变化 | 发送后变"工作中"（绿色动画），完成后变"空闲" |
-| **配置持久化** | 创建角色后重启 IDE | 角色仍然存在，历史记录保留 |
+| **RPC 流式传输** | chunk 丢失率 | 0% |
+| | chunk 乱序率 | 0% |
+| | 单次往返延迟 p95 | < 100ms |
+| | UI 卡顿 | 无明显卡顿 |
+| | 主线程 CPU 额外占用 | < 5% |
+| | 内存泄漏 | 无持续上升 |
+| **Cancel 穿透** | Cancel 生效时间 | < 200ms |
+| | Cancel 成功率 | 100% |
+| | 状态一致性 | 100% |
+| **跨 Host 路由** | 匹配路由成功率 | 100% |
+| | 错配拒绝率 | 100% |
+| | 错误码准确性 | 100% |
+| | 审计记录完整性 | 100% |
 
 ---
 
 ## 八、常见问题与决策记录
 
-### 8.1 为什么选择"接口先行 + 并行切片"？
+### 8.1 为什么要做 PoC-0 技术预研？
 
-**问题**：UI-first 和 Backend-first 各有什么问题？
+**问题**：为什么不直接开始开发？
 
-| 方案 | 优点 | 致命弱点 |
-|------|------|---------|
-| UI-first | 操作流程明确 | 方案任何缺陷都会导致 UI→代码→文档的三重反复 |
-| Backend-first | 不存在方案不可行的风险 | 验证后端需要交互 UI，但这段 UI 最终是废代码 |
+**原因**：
+- VS Code RPC 机制设计初衷不是为高频流式场景设计
+- 如果核心技术点无法支撑，整个架构需要重新设计
+- 提前验证可以避免大量返工和浪费
 
-**决策**：接口先行后，UI 使用 Mock Service 开发，接口不变则 UI 代码完全复用，无废代码。
+**决策**：先用最小代码验证三个最高风险的技术点，全部通过后才进入正式开发。
 
 ### 8.2 如何处理 TypeScript 编译错误？
 
@@ -710,14 +744,14 @@ HumanCode: 用户
 - 如果工具不可用：运行 `npm run compile-check-ts-native`（仅检查 `src/`）
 - 如果修改了 `extensions/`：运行 `npm run gulp compile-extensions`
 
-### 8.3 如何验证 RPC 拦截是否工作？
+### 8.3 如何验证 RPC 流式传输是否工作？
 
-参考 [docs/phases/phase1-integration.md](phases/phase1-integration.md) 的 Task D 部分：
+参考 [docs/ai-interop/00-poc-0-technical-validation.md](../ai-interop/00-poc-0-technical-validation.md) 的验证点 1：
 
-1. 启动开发环境：`./startcode.sh`
-2. 打开通义灵码聊天窗口，发送消息
-3. 查看日志：`tail -f 1.log` 或按 `Cmd+Option+I` 打开 DevTools
-4. 搜索关键词：`[HumanCodeRPCLogger]`、`logOutgoing`、`logIncoming`
+1. 创建两个测试扩展：`test-ai-interop-controller` 和 `test-ai-interop-worker`
+2. Worker 每 20ms 发送 1 个 chunk，共 100 个
+3. Controller 统计接收情况：丢失率、乱序率、延迟
+4. 验证通过标准：0% 丢失，0% 乱序，p95 延迟 < 100ms
 
 ---
 
@@ -727,30 +761,39 @@ HumanCode: 用户
 
 | 功能 | 文件路径 |
 |------|---------|
-| RPC 协议核心 | `src/vs/workbench/services/extensions/common/rpcProtocol.ts` |
-| Extension Host 管理器 | `src/vs/workbench/services/extensions/common/extensionHostManager.ts` |
-| HumanCode RPC Logger | `extensionHostManager.ts` 中 `HumanCodeRPCLogger` 类 |
-| 消息服务接口 | `src/vs/workbench/services/extensionMessages/common/extensionMessages.ts` |
-| 消息服务实现 | `src/vs/workbench/services/extensionMessages/browser/extensionMessagesService.ts` |
-| 消息视图 | `src/vs/workbench/contrib/extensionMessages/browser/extensionMessagesView.ts` |
-| AI 会话管理接口 | `src/vs/workbench/services/aiSessionManager/common/aiSessionManager.ts` |
-| AI 会话管理实现 | `src/vs/workbench/services/aiSessionManager/browser/aiSessionManagerService.ts` |
-| AI Team Panel | `src/vs/workbench/contrib/aiTeam/browser/aiTeamPanel.ts` |
+| **Services 层** | |
+| AI Interop 接口定义 | `src/vs/workbench/services/aiInterop/common/aiInterop.ts` |
+| AI Interop Bus 实现 | `src/vs/workbench/services/aiInterop/browser/aiInteropService.ts` |
+| Session Broker 实现 | `src/vs/workbench/services/aiInterop/browser/aiSessionBroker.ts` |
+| 权限策略服务 | `src/vs/workbench/services/aiInterop/browser/aiInteropPolicyService.ts` |
+| 审计服务 | `src/vs/workbench/services/aiInterop/browser/aiInteropAuditService.ts` |
+| **API Bridge 层** | |
+| 主线程 RPC customer | `src/vs/workbench/api/browser/mainThreadAiInterop.ts` |
+| ExtHost API 实现 | `src/vs/workbench/api/common/extHostAiInterop.ts` |
+| RPC Shape 定义 | `src/vs/workbench/api/common/extHost.protocol.ts` |
+| API 装配 | `src/vs/workbench/api/common/extHost.api.impl.ts` |
+| **Contrib UI 层** | |
+| UI 注册 | `src/vs/workbench/contrib/aiInterop/browser/aiInterop.contribution.ts` |
+| 审计视图 | `src/vs/workbench/contrib/aiInterop/browser/aiInteropAuditView.ts` |
+| 权限视图 | `src/vs/workbench/contrib/aiInterop/browser/aiInteropPermissionsView.ts` |
 
 ### 9.2 文档文件
 
 | 文档 | 路径 | 用途 |
 |------|------|------|
-| **总设计文档** | `docs/HumanCode-全面改造总设计文档.md` | 项目全貌、架构设计、分阶段计划 |
-| **产品愿景** | `docs/产品愿景与需求文档.md` | 产品定位、核心价值、用户需求 |
-| **Phase 0** | `docs/phases/phase0.md` | 基础消息通路验证（已完成） |
-| **Phase 1** | `docs/phases/phase1.md` | 多 AI 虚拟会话管理（进行中） |
-| **Phase 1 任务提示词** | `docs/phases/phase1-task-prompts.md` | Task A/B/C 的完整提示词模板 |
-| **Phase 1 集成** | `docs/phases/phase1-integration.md` | 集成阶段任务拆解（Task D/E/F） |
-| **Phase 2** | `docs/phases/phase2.md` | 自动化协作工作流（待开始） |
-| **UI 整体布局** | `docs/ui/UI整体布局.md` | UI 设计原则和界面元素要求 |
-| **UI Phase 1** | `docs/ui/ui-phase1.md` | Phase 1 界面设计细节 |
-| **开发环境配置** | `docs/开发环境配置.md` | 开发环境搭建和调试方法 |
+| **AI Interop 核心文档** | | |
+| 执行摘要与范围 | `docs/ai-interop/01-executive-summary-and-scope.md` | 项目目标、非目标、成功标准 |
+| 核心架构设计 | `docs/ai-interop/02-core-architecture.md` | 五层架构、模块职责、源码落点 |
+| RPC 协议规范 | `docs/ai-interop/03-rpc-and-dto-spec.md` | RPC Shape、DTO 定义、协议规范 |
+| Session 状态机 | `docs/ai-interop/04-session-state-machine.md` | Session 生命周期、状态转换 |
+| 权限与安全 | `docs/ai-interop/05-permission-and-security.md` | 权限模型、授权流程、安全策略 |
+| Adapter 策略 | `docs/ai-interop/06-adapter-strategy.md` | Chat/Tool/MCP 适配方案 |
+| 测试与验收 | `docs/ai-interop/07-test-and-acceptance.md` | 测试策略、验收标准 |
+| 开发手册 | `docs/ai-interop/08-development-playbook.md` | 开发流程、最佳实践 |
+| **技术预研文档** | | |
+| PoC-0 验证计划 | `docs/ai-interop/00-poc-0-technical-validation.md` | 三个核心技术点的验证方案 |
+| **角色手册** | | |
+| AI 项目经理手册 | `docs/role-desc/AI项目经理工作手册.md` | 本文档 |
 
 ---
 
