@@ -1,9 +1,3 @@
-
----
-
-# 3. `03-rpc-and-dto-spec.md`
-
-```md
 # AI Interop 平台能力：接口协议文档（RPC / DTO）
 
 ## 1. 文档目标
@@ -16,11 +10,13 @@
 2. 所有消息必须可序列化；
 3. 流式输出统一使用 chunk 批量传输；
 4. cancel 必须是正式协议事件，不依赖约定；
-5. 协议必须支持后续扩展字段。:contentReference[oaicite:26]{index=26}
+5. 协议必须支持后续扩展字段；
+6. 同一 invocation 的事件必须有稳定顺序语义。
 
 ## 3. RPC Shape
 
 ### 3.1 MainThreadAiInteropShape
+
 主线程暴露给扩展宿主的方法：
 
 ```ts
@@ -31,6 +27,7 @@ export interface MainThreadAiInteropShape {
   $createSession(request: CreateSessionRequestDto): Promise<CreateSessionResultDto>;
   $joinSession(request: JoinSessionRequestDto): Promise<void>;
   $leaveSession(request: LeaveSessionRequestDto): Promise<void>;
+  $closeSession(sessionId: string): Promise<void>;
 
   $invoke(request: InvocationStartDto): Promise<void>;
   $acceptInvocationChunk(invocationId: string, chunks: InvocationChunkDto[]): Promise<void>;
@@ -38,12 +35,13 @@ export interface MainThreadAiInteropShape {
   $failInvocation(invocationId: string, error: InvocationErrorDto): Promise<void>;
   $cancelInvocation(invocationId: string): Promise<void>;
 }
+```
 
-
-3.2 ExtHostAiInteropShape
+### 3.2 ExtHostAiInteropShape
 
 扩展宿主暴露给主线程的方法：
 
+```ts
 export interface ExtHostAiInteropShape {
   $onInvocation(request: InvocationStartDto): Promise<void>;
   $onInvocationCancel(invocationId: string): Promise<void>;
@@ -54,9 +52,13 @@ export interface ExtHostAiInteropShape {
 
   $onAuthorizationRequired(request: AuthorizationPromptDto): Promise<AuthorizationDecisionDto>;
 }
+```
 
-4. DTO 规范
-4.1 EndpointDescriptorDto
+## 4. DTO 规范
+
+### 4.1 EndpointDescriptorDto
+
+```ts
 export interface EndpointDescriptorDto {
   id: string;
   extensionId: string;
@@ -69,12 +71,18 @@ export interface EndpointDescriptorDto {
   supportedContentTypes?: string[];
   tags?: string[];
   capabilityHints?: string[];
+  metadata?: Record<string, unknown>;
 }
-4.2 Session DTO
+```
+
+### 4.2 Session DTO
+
+```ts
 export interface CreateSessionRequestDto {
   title?: string;
   ownerExtensionId: string;
   workspaceKey: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CreateSessionResultDto {
@@ -93,6 +101,13 @@ export interface LeaveSessionRequestDto {
   endpointId: string;
 }
 
+export interface SessionParticipantDto {
+  endpointId: string;
+  extensionId: string;
+  role: 'controller' | 'worker' | 'observer' | 'ui';
+  state: 'joining' | 'joined' | 'offline' | 'removed';
+}
+
 export interface SessionSnapshotDto {
   sessionId: string;
   title?: string;
@@ -100,8 +115,13 @@ export interface SessionSnapshotDto {
   state: 'active' | 'suspended' | 'closed';
   members: SessionParticipantDto[];
   updatedAt: number;
+  metadata?: Record<string, unknown>;
 }
-4.3 InvocationStartDto
+```
+
+### 4.3 InvocationStartDto
+
+```ts
 export interface InvocationStartDto {
   invocationId: string;
   sessionId: string;
@@ -119,8 +139,25 @@ export interface InvocationStartDto {
   };
 
   timeoutMs?: number;
+  metadata?: Record<string, unknown>;
 }
-4.4 InvocationChunkDto
+```
+
+### 4.4 ArtifactRefDto
+
+```ts
+export interface ArtifactRefDto {
+  id: string;
+  kind: 'file' | 'uri' | 'memory' | 'webviewState' | 'other';
+  name?: string;
+  uri?: string;
+  metadata?: Record<string, unknown>;
+}
+```
+
+### 4.5 InvocationChunkDto
+
+```ts
 export type InvocationChunkDto =
   | TextChunkDto
   | MarkdownChunkDto
@@ -135,6 +172,7 @@ export interface BaseChunkDto {
   seq: number;
   timestamp: number;
   kind: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface TextChunkDto extends BaseChunkDto {
@@ -185,13 +223,18 @@ export interface ArtifactChunkDto extends BaseChunkDto {
   kind: 'artifact';
   ref: ArtifactRefDto;
 }
-4.5 Completion / Error DTO
+```
+
+### 4.6 Completion / Error DTO
+
+```ts
 export interface InvocationCompleteDto {
   invocationId: string;
   finalStatus: 'completed';
   summary?: string;
   result?: unknown;
   finishedAt: number;
+  metadata?: Record<string, unknown>;
 }
 
 export interface InvocationErrorDto {
@@ -202,7 +245,30 @@ export interface InvocationErrorDto {
   details?: unknown;
   finishedAt: number;
 }
-5. 错误码规范
+```
+
+### 4.7 权限授权 DTO
+
+```ts
+export interface AuthorizationPromptDto {
+  requestId: string;
+  callerExtensionId: string;
+  targetExtensionId: string;
+  sessionId: string;
+  contextMode: 'none' | 'lastTurn' | 'full' | 'redacted';
+  requestedCapabilities?: string[];
+}
+
+export interface AuthorizationDecisionDto {
+  requestId: string;
+  decision: 'allow_once' | 'allow_session' | 'allow_persisted' | 'deny';
+  grantedContextMode?: 'none' | 'lastTurn' | 'full' | 'redacted';
+}
+```
+
+## 5. 错误码规范
+
+```ts
 export type AiInteropErrorCode =
   | 'ENDPOINT_NOT_FOUND'
   | 'UNAUTHORIZED'
@@ -217,85 +283,64 @@ export type AiInteropErrorCode =
   | 'TARGET_HANDLER_ERROR'
   | 'PROTOCOL_VIOLATION'
   | 'PAYLOAD_TOO_LARGE';
+```
 
 要求：
 
-所有错误必须返回稳定 code；
+- 所有错误必须返回稳定 code；
+- `message` 仅用于日志与展示；
+- 是否可重试必须显式标记；
+- UI 不得依赖 message 做逻辑分支。
 
-message 仅用于日志与展示；
+## 6. 取消语义
 
-是否可重试必须显式标记。
+### 6.1 原则
 
-6. 取消语义
-6.1 原则
+- cancel 是 invocation 级别；
+- 主控端可随时请求 cancel；
+- 主线程必须通过 RPC cancel 传播到目标 ExtHost；
+- 目标 handler 必须收到 `CancellationToken`；
+- cancel 后不得再发送新的业务 chunk；
+- 平台可接受一个最终 `failed(code=INVOCATION_CANCELED)` 终止帧。
 
-cancel 是 invocation 级别；
+### 6.2 时序
 
-主控端可随时请求 cancel；
+1. caller 发起 cancel；
+2. Bus 标记 invocation 为 `cancel-requested`；
+3. MainThreadAiInterop 调用 `$onInvocationCancel(invocationId)`；
+4. ExtHost handler 收到 cancel；
+5. handler 停止执行；
+6. 返回终止帧；
+7. Session Broker 写入状态；
+8. Audit 记录 cancel 决策与完成时间。
 
-主线程必须通过 RPC cancel 传播到目标 ExtHost；
+## 7. Chunk 顺序与批量保证
 
-目标 handler 必须收到 CancellationToken；
+### 7.1 顺序
 
-cancel 后不得再发送新的业务 chunk；
+- 同一 invocation 下，chunk 按 `seq` 单调递增；
+- 平台必须拒绝倒序 chunk；
+- 重复 `seq` 仅允许幂等去重，不允许双写。
 
-平台可接受一个最终 failed(code=INVOCATION_CANCELED) 或 completed(finalStatus=canceled) 终止帧。
+### 7.2 批量
 
-6.2 时序
+- `acceptInvocationChunk(invocationId, chunks[])` 是推荐路径；
+- 单批次建议不超过：
+  - 64 chunks 或
+  - 256KB payload
 
-caller 发起 cancel；
-
-Bus 标记 invocation 为 cancel-requested；
-
-MainThreadAiInterop 调用 $onInvocationCancel(invocationId)；
-
-ExtHost handler 收到 cancel；
-
-handler 停止执行；
-
-返回终止帧；
-
-Session Broker 写入状态；
-
-Audit 记录 cancel 决策与完成时间。
-
-7. Chunk 顺序与批量保证
-7.1 顺序
-
-同一 invocation 下，chunk 按 seq 单调递增；
-
-平台必须拒绝倒序 chunk；
-
-重复 seq 仅允许幂等去重，不允许双写。
-
-7.2 批量
-
-acceptInvocationChunk(invocationId, chunks[]) 是推荐路径；
-
-单批次建议不超过：
-
-64 chunks 或
-
-256KB payload
-
-平台可在主线程侧二次合批写入审计日志。
-
-7.3 背压
+### 7.3 背压
 
 当达到阈值时：
 
-平台可延迟消费；
+- 平台可延迟消费；
+- 平台可下发 flow-control；
+- 低优先级 status 可被合并；
+- 文本 token 可被压缩成更大块。
 
-平台可下发 flow-control；
+## 8. 协议扩展策略
 
-低优先级 status 可被合并；
-
-文本 token 可被压缩成更大块。
-
-8. 兼容策略
-
-新字段必须是可选字段；
-
-shape 方法只能追加，不能在 proposed 期间频繁改语义；
-
-所有 DTO 均应预留 metadata?: Record<string, unknown>。
+- 新字段必须是可选字段；
+- 新枚举值必须允许旧端安全忽略；
+- 所有 DTO 预留 `metadata?: Record<string, unknown>`；
+- proposed 阶段允许扩展字段，但不允许频繁推翻已有主语义。

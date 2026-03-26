@@ -1,9 +1,3 @@
-
----
-
-# 4. `04-session-state-machine.md`
-
-```md
 # AI Interop 平台能力：会话状态机文档
 
 ## 1. 目标
@@ -13,16 +7,21 @@
 ## 2. 核心对象
 
 ### 2.1 Session
+
 表示一个平台级协作会话，承载多轮交互、多参与者与共享状态。
 
 ### 2.2 Turn
+
 表示主控方发起的一轮任务或子任务窗口。一个 Turn 下可包含多个 Invocation。
 
 ### 2.3 Invocation
+
 表示一次确定目标端点的实际调用，是流式通信和取消的最小执行单元。
 
 ### 2.4 Participant
+
 表示加入 Session 的成员，角色包括：
+
 - controller
 - worker
 - observer
@@ -31,6 +30,7 @@
 ## 3. Session 状态机
 
 ### 3.1 状态定义
+
 - `active`
 - `suspended`
 - `closed`
@@ -44,129 +44,138 @@ stateDiagram-v2
   suspended --> active: endpoint_rebind / reconnect
   active --> closed: user_close / workspace_close
   suspended --> closed: timeout / explicit_abort
+```
 
-3.3 规则
+### 3.3 规则
 
-Session 创建后默认进入 active；
+- Session 创建后默认进入 `active`；
+- 任一关键 participant 丢失时，Session 可进入 `suspended`；
+- 所有 invocation 结束且用户关闭后，进入 `closed`；
+- `closed` 不可恢复，只能新建 session。
 
-任一关键 participant 丢失时，Session 可进入 suspended；
+## 4. Turn 状态机
 
-所有 invocation 结束且用户关闭后，进入 closed；
+### 4.1 状态定义
 
-closed 不可恢复，只能新建 session。
+- `open`
+- `running`
+- `completed`
+- `failed`
+- `canceled`
 
-4. Invocation 状态机
-4.1 状态定义
+### 4.2 转移规则
 
-pending
+- controller 发起新任务时创建 Turn；
+- 至少一个 invocation 启动后进入 `running`；
+- 所有关联 invocation 成功完成后进入 `completed`；
+- 任一关键 invocation 失败且未恢复时可进入 `failed`；
+- 用户主动中断后进入 `canceled`。
 
-streaming
+## 5. Invocation 状态机
 
-waiting_authorization
+### 5.1 状态定义
 
-waiting_tool
+- `pending`
+- `streaming`
+- `waiting_authorization`
+- `waiting_tool`
+- `completed`
+- `failed`
+- `canceled`
+- `orphaned`
 
-completed
+### 5.2 状态图
 
-failed
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> streaming: target_accept
+  pending --> failed: reject / route_error
 
-canceled
+  streaming --> waiting_authorization: permission_needed
+  waiting_authorization --> streaming: authorized
+  waiting_authorization --> failed: denied
 
-orphaned
+  streaming --> waiting_tool: tool_call
+  waiting_tool --> streaming: tool_result
+  waiting_tool --> failed: tool_denied
 
-4.2 状态图
+  streaming --> completed: complete
+  streaming --> failed: error
+  streaming --> canceled: cancel_ack
+  streaming --> orphaned: host_lost
 
+  orphaned --> pending: retry
+  orphaned --> failed: abandon
+```
 
+## 6. Participant 生命周期
 
-5. Participant 生命周期
-5.1 状态
+### 6.1 状态
 
-joining
+- `joining`
+- `joined`
+- `offline`
+- `removed`
 
-joined
+### 6.2 规则
 
-offline
+- `joining` 为短暂过渡态；
+- endpoint 注册完成并获得权限后进入 `joined`；
+- host 丢失后进入 `offline`；
+- 被用户或系统移除后进入 `removed`。
 
-removed
+## 7. 恢复机制
 
-5.2 规则
-
-joining 仅为短暂过渡态；
-
-endpoint 注册完成并获得权限后进入 joined；
-
-host 丢失后进入 offline；
-
-被用户或系统移除后进入 removed。
-
-6. 恢复机制
-6.1 Session 恢复
+### 7.1 Session 恢复
 
 允许恢复：
 
-session 元数据
-
-participant 列表
-
-invocation 索引
-
-审计事件引用
-
-结构化 state
+- session 元数据
+- participant 列表
+- invocation 索引
+- 审计事件引用
+- 结构化 state
 
 不保证恢复：
 
-正在进行的模型生成上下文
+- 正在进行的模型生成上下文
+- 正在运行的 CLI 子进程内部堆栈
+- 非幂等工具的已执行副作用
 
-正在运行的 CLI 子进程内部堆栈
+### 7.2 Invocation 恢复
 
-非幂等工具的已执行副作用
+- 若目标 handler 支持 resume，则可带 cursor 恢复；
+- 若不支持 resume，则只能重试；
+- 重试必须创建新 `invocationId`，但可保留 `retryOf` 引用。
 
-6.2 Invocation 恢复
+## 8. Retry 边界
 
-若目标 handler 支持 resume，则可带 cursor 恢复；
+### 8.1 可重试
 
-若不支持 resume，则只能重试；
+- route error
+- host lost
+- timeout
+- transient tool failure
 
-重试必须创建新 invocationId，但可保留 retryOf 引用。
+### 8.2 不可重试
 
-7. Retry 边界
-7.1 可重试
+- permission denied
+- remoteAuthority mismatch
+- protocol violation
+- user explicit cancel
+- non-idempotent side effect already committed
 
-route error
+## 9. Orphaned 语义
 
-host lost
+`orphaned` 不是失败，它表示：
 
-timeout
-
-transient tool failure
-
-7.2 不可重试
-
-permission denied
-
-remoteAuthority mismatch
-
-protocol violation
-
-user explicit cancel
-
-non-idempotent side effect already committed
-
-8. Orphaned 语义
-
-orphaned 不是失败，它表示：
-
-平台失去了目标执行端；
-
-当前 invocation 无法继续推进；
-
-用户可以选择 retry / switch worker / abort。
+- 平台失去了目标执行端；
+- 当前 invocation 无法继续推进；
+- 用户可以选择 retry / switch worker / abort。
 
 平台要求：
 
-orphaned 必须在 UI 中可见；
-
-orphaned 必须写审计；
-
-orphaned 不得被静默吞掉。
+- orphaned 必须在 UI 中可见；
+- orphaned 必须写审计；
+- orphaned 不得被静默吞掉。
