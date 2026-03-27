@@ -71,89 +71,115 @@ function percentile(values: number[], p: number): number {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('[Controller] Test AI Interop Controller extension activated');
+	try {
+		console.log('[Controller] Test AI Interop Controller extension activated');
+		console.log('[Controller] vscode object keys:', Object.keys(vscode).filter(k => k.includes('test') || k.includes('Test')));
 
-	// Get the internal test API
-	const api = (vscode as any).testAiInterop as TestAiInteropAPI | undefined;
+		// Get the internal test API
+		const api = (vscode as any).testAiInterop as TestAiInteropAPI | undefined;
 
-	if (!api) {
-		console.error('[Controller] Test AI Interop API not available');
-		return;
-	}
+		console.log('[Controller] testAiInterop API:', api ? 'available' : 'NOT AVAILABLE');
+		console.log('[Controller] testAiInterop type:', typeof api);
 
-	const command = vscode.commands.registerCommand('test-ai-interop.runTest', async () => {
-		const invocationId = `test-${Date.now()}`;
-		const received: number[] = [];
-		const timestamps: number[] = [];
-		const startTime = Date.now();
+		if (!api) {
+			console.error('[Controller] Test AI Interop API not available');
+			vscode.window.showErrorMessage('[Controller] Test AI Interop API not available');
+			return;
+		}
 
-		console.log(`[Controller] Starting test with invocationId: ${invocationId}`);
+		const command = vscode.commands.registerCommand('test-ai-interop.runTest', async () => {
+			const numWorkers = 10;
+			const chunksPerWorker = 50;
+			const totalChunks = numWorkers * chunksPerWorker;
+			const startTime = Date.now();
 
-		// Subscribe to chunk received events
-		const disposable = api.onDidReceiveChunk((data) => {
-			if (data.invocationId === invocationId) {
-				received.push(data.seq);
-				timestamps.push(data.timestamp);
+			console.log(`[Controller] Starting concurrent test with ${numWorkers} workers, ${chunksPerWorker} chunks each`);
+
+			// Track all received chunks across all workers
+			const allReceived = new Map<string, { received: number[]; timestamps: number[] }>();
+
+			// Subscribe to chunk received events
+			const disposable = api.onDidReceiveChunk((data) => {
+				if (!allReceived.has(data.invocationId)) {
+					allReceived.set(data.invocationId, { received: [], timestamps: [] });
+				}
+				const stats = allReceived.get(data.invocationId)!;
+				stats.received.push(data.seq);
+				stats.timestamps.push(data.timestamp);
+			});
+
+			try {
+				// Invoke all workers concurrently
+				const invocationIds = Array.from({ length: numWorkers }, (_, i) => `test-${Date.now()}-worker${i}`);
+
+				// Initialize tracking for all workers
+				invocationIds.forEach(id => {
+					allReceived.set(id, { received: [], timestamps: [] });
+				});
+
+				// Start all workers in parallel
+				await Promise.all(invocationIds.map(id => api.invoke(id)));
+
+				// Wait for all workers to complete
+				await new Promise(resolve => setTimeout(resolve, 3000));
+
+				// Calculate aggregate statistics
+				const endTime = Date.now();
+				const totalTime = endTime - startTime;
+
+				let totalReceived = 0;
+				let totalMissing = 0;
+				let totalOutOfOrder = 0;
+
+				invocationIds.forEach(id => {
+					const stats = allReceived.get(id)!;
+					totalReceived += stats.received.length;
+					totalMissing += findMissingSeq(stats.received, chunksPerWorker).length;
+					totalOutOfOrder += checkOrder(stats.received).length;
+				});
+
+				const lossRate = ((totalChunks - totalReceived) / totalChunks) * 100;
+
+				// Output statistics report
+				const report = [
+					'',
+					'=== AI Interop RPC Concurrent Test Results ===',
+					'',
+					`Workers: ${numWorkers}`,
+					`Chunks per worker: ${chunksPerWorker}`,
+					`Total expected chunks: ${totalChunks}`,
+					`Total received chunks: ${totalReceived}`,
+					`Total time: ${totalTime}ms`,
+					`Loss rate: ${lossRate.toFixed(2)}%`,
+					`Missing chunks: ${totalMissing}`,
+					`Out of order chunks: ${totalOutOfOrder}`,
+					'',
+					'Per-worker breakdown:',
+					...invocationIds.map(id => {
+						const stats = allReceived.get(id)!;
+						return `  ${id}: ${stats.received.length}/${chunksPerWorker} chunks`;
+					}),
+					'',
+					'===============================================',
+					''
+				].join('\n');
+
+				console.log(report);
+				vscode.window.showInformationMessage(`Test completed: ${totalReceived}/${totalChunks} chunks received (${numWorkers} workers), ${lossRate.toFixed(2)}% loss`);
+
+			} catch (error) {
+				console.error(`[Controller] Test failed:`, error);
+				vscode.window.showErrorMessage(`Test failed: ${error}`);
+			} finally {
+				disposable.dispose();
 			}
 		});
 
-		try {
-			// Invoke the worker
-			await api.invoke(invocationId);
-
-			// Wait for completion (max 5 seconds)
-			await waitForCompletion(received, 100, 5000);
-
-			// Calculate statistics
-			const endTime = Date.now();
-			const totalTime = endTime - startTime;
-			const missing = findMissingSeq(received, 100);
-			const outOfOrder = checkOrder(received);
-			const lossRate = ((100 - received.length) / 100) * 100;
-
-			// Calculate latencies
-			const latencies: number[] = [];
-			for (let i = 1; i < timestamps.length; i++) {
-				latencies.push(timestamps[i] - timestamps[i - 1]);
-			}
-
-			// Output statistics report
-			const report = [
-				'',
-				'=== AI Interop RPC Performance Test Results ===',
-				'',
-				`Invocation ID: ${invocationId}`,
-				`Total time: ${totalTime}ms`,
-				`Expected chunks: 100`,
-				`Received chunks: ${received.length}`,
-				`Loss rate: ${lossRate.toFixed(2)}%`,
-				`Out of order: ${outOfOrder.length}`,
-				'',
-				'Latency Statistics:',
-				`  Min: ${latencies.length > 0 ? Math.min(...latencies) : 0}ms`,
-				`  Max: ${latencies.length > 0 ? Math.max(...latencies) : 0}ms`,
-				`  Avg: ${latencies.length > 0 ? (latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2) : 0}ms`,
-				`  P95: ${percentile(latencies, 0.95).toFixed(2)}ms`,
-				'',
-				missing.length > 0 ? `Missing sequences: ${missing.join(', ')}` : 'No missing sequences',
-				outOfOrder.length > 0 ? `Out of order indices: ${outOfOrder.join(', ')}` : 'No out of order chunks',
-				'',
-				'===============================================',
-				''
-			].join('\n');
-
-			console.log(report);
-			vscode.window.showInformationMessage(`Test completed: ${received.length}/100 chunks received, ${lossRate.toFixed(2)}% loss`);
-
-		} catch (error) {
-			console.error(`[Controller] Test failed:`, error);
-			vscode.window.showErrorMessage(`Test failed: ${error}`);
-		} finally {
-			disposable.dispose();
-		}
-	});
-
-	context.subscriptions.push(command);
+		context.subscriptions.push(command);
+	} catch (error) {
+		console.error('[Controller] Fatal error during activation:', error);
+		vscode.window.showErrorMessage(`[Controller] Fatal error: ${error}`);
+	}
 }
 
 export function deactivate() {

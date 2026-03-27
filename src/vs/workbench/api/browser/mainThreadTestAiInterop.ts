@@ -56,13 +56,13 @@ export class MainThreadTestAiInterop extends Disposable implements MainThreadTes
 		// Record chunk
 		stats.chunks.push({ seq, text, timestamp });
 
-		// Fire event for controller extension
-		this._onDidReceiveChunk.fire({ invocationId, seq, text, timestamp });
+		// Notify ExtHost so it can fire the event for extensions
+		this._proxy.$onDidReceiveChunk(invocationId, seq, text, timestamp);
 
 		this._logService.trace(`[TestAiInterop] Received chunk ${seq} for invocation ${invocationId}`);
 	}
 
-	async invoke(invocationId: string): Promise<void> {
+	async $invoke(invocationId: string): Promise<void> {
 		this._logService.info(`[TestAiInterop] Invoking worker with invocationId: ${invocationId}`);
 
 		// Initialize stats
@@ -76,7 +76,7 @@ export class MainThreadTestAiInterop extends Disposable implements MainThreadTes
 		this._proxy.$onInvoke(invocationId);
 	}
 
-	getStats(invocationId: string): InvocationStats | undefined {
+	$getStats(invocationId: string): InvocationStats | undefined {
 		return this._invocationStats.get(invocationId);
 	}
 
@@ -84,7 +84,7 @@ export class MainThreadTestAiInterop extends Disposable implements MainThreadTes
 		return Array.from(this._invocationStats.values());
 	}
 
-	clearStats(): void {
+	$clearStats(): void {
 		this._invocationStats.clear();
 	}
 }

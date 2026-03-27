@@ -15,34 +15,44 @@ function sleep(ms: number): Promise<void> {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('[Worker] Test AI Interop Worker extension activated');
+	try {
+		console.log('[Worker] Test AI Interop Worker extension activated');
+		console.log('[Worker] vscode object keys:', Object.keys(vscode).filter(k => k.includes('test') || k.includes('Test')));
 
-	// Get the internal test API
-	const api = (vscode as any).testAiInterop as TestAiInteropAPI | undefined;
+		// Get the internal test API
+		const api = (vscode as any).testAiInterop as TestAiInteropAPI | undefined;
 
-	if (!api) {
-		console.error('[Worker] Test AI Interop API not available');
-		return;
-	}
+		console.log('[Worker] testAiInterop API:', api ? 'available' : 'NOT AVAILABLE');
+		console.log('[Worker] testAiInterop type:', typeof api);
 
-	// Listen for invocations
-	const disposable = api.onInvoke(async (invocationId: string) => {
-		console.log(`[Worker] Received invocation: ${invocationId}`);
-
-		try {
-			// Scenario 1: Basic streaming - 100 chunks, 20ms interval
-			for (let i = 0; i < 100; i++) {
-				await api.sendChunk(invocationId, i, `chunk-${i}`);
-				await sleep(20);
-			}
-
-			console.log(`[Worker] Completed invocation: ${invocationId}`);
-		} catch (error) {
-			console.error(`[Worker] Error during invocation ${invocationId}:`, error);
+		if (!api) {
+			console.error('[Worker] Test AI Interop API not available');
+			vscode.window.showErrorMessage('[Worker] Test AI Interop API not available');
+			return;
 		}
-	});
 
-	context.subscriptions.push(disposable);
+		// Listen for invocations
+		const disposable = api.onInvoke(async (invocationId: string) => {
+			console.log(`[Worker] Received invocation: ${invocationId}`);
+
+			try {
+				// Scenario 4: Concurrent calls - 50 chunks, 20ms interval
+				for (let i = 0; i < 50; i++) {
+					await api.sendChunk(invocationId, i, `chunk-${i}`);
+					await sleep(20);
+				}
+
+				console.log(`[Worker] Completed invocation: ${invocationId}`);
+			} catch (error) {
+				console.error(`[Worker] Error during invocation ${invocationId}:`, error);
+			}
+		});
+
+		context.subscriptions.push(disposable);
+	} catch (error) {
+		console.error('[Worker] Fatal error during activation:', error);
+		vscode.window.showErrorMessage(`[Worker] Fatal error: ${error}`);
+	}
 }
 
 export function deactivate() {

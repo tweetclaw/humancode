@@ -13,12 +13,19 @@ export class ExtHostTestAiInterop implements ExtHostTestAiInteropShape {
 	private readonly _onInvoke = new Emitter<string>();
 	readonly onInvoke = this._onInvoke.event;
 
+	private readonly _onDidReceiveChunk = new Emitter<{ invocationId: string; seq: number; text: string; timestamp: number }>();
+	readonly onDidReceiveChunk = this._onDidReceiveChunk.event;
+
 	constructor(mainContext: IMainContext) {
 		this._proxy = mainContext.getProxy(MainContext.MainThreadTestAiInterop);
 	}
 
 	$onInvoke(invocationId: string): void {
 		this._onInvoke.fire(invocationId);
+	}
+
+	$onDidReceiveChunk(invocationId: string, seq: number, text: string, timestamp: number): void {
+		this._onDidReceiveChunk.fire({ invocationId, seq, text, timestamp });
 	}
 
 	async sendChunk(invocationId: string, seq: number, text: string): Promise<void> {

@@ -20,3 +20,4 @@ bin-release/
 
 # Extension build output
 extensions/**/dist/
+2.log

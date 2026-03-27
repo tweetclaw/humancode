@@ -1843,24 +1843,21 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 		// This allows test extensions to access the RPC test infrastructure
 		const testAiInterop = {
 			onInvoke: extHostTestAiInterop.onInvoke,
+			onDidReceiveChunk: extHostTestAiInterop.onDidReceiveChunk,
 			sendChunk: (invocationId: string, seq: number, text: string) => {
 				return extHostTestAiInterop.sendChunk(invocationId, seq, text);
 			},
 			invoke: (invocationId: string) => {
 				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
-				return (mainThreadProxy as any).invoke(invocationId);
-			},
-			onDidReceiveChunk: (...args: any[]) => {
-				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
-				return (mainThreadProxy as any).onDidReceiveChunk(...args);
+				return mainThreadProxy.$invoke(invocationId);
 			},
 			getStats: (invocationId: string) => {
 				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
-				return (mainThreadProxy as any).getStats(invocationId);
+				return mainThreadProxy.$getStats(invocationId);
 			},
 			clearStats: () => {
 				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
-				return (mainThreadProxy as any).clearStats();
+				return mainThreadProxy.$clearStats();
 			}
 		};
 

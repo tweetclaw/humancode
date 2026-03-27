@@ -1764,6 +1764,7 @@ export interface ExtHostUrlsShape {
 
 export interface ExtHostTestAiInteropShape {
 	$onInvoke(invocationId: string): void;
+	$onDidReceiveChunk(invocationId: string, seq: number, text: string, timestamp: number): void;
 }
 
 export interface MainThreadUriOpenersShape extends IDisposable {
@@ -2128,6 +2129,9 @@ export interface MainThreadTimelineShape extends IDisposable {
 
 export interface MainThreadTestAiInteropShape extends IDisposable {
 	$acceptChunk(invocationId: string, seq: number, text: string): void;
+	$invoke(invocationId: string): Promise<void>;
+	$getStats(invocationId: string): any;
+	$clearStats(): void;
 }
 
 export interface HoverWithId extends languages.Hover {
