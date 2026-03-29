@@ -99,6 +99,7 @@ import { IExtensionStoragePaths } from './extHostStoragePaths.js';
 import { IExtHostTask } from './extHostTask.js';
 import { ExtHostTelemetryLogger, IExtHostTelemetry, isNewAppInstall } from './extHostTelemetry.js';
 import { ExtHostTestAiInterop } from './extHostTestAiInterop.js';
+import { ExtHostAiInterop } from './extHostAiInterop.js';
 import { IExtHostTerminalService } from './extHostTerminalService.js';
 import { IExtHostTerminalShellIntegration } from './extHostTerminalShellIntegration.js';
 import { IExtHostTesting } from './extHostTesting.js';
@@ -251,6 +252,7 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 	const extHostEmbeddings = rpcProtocol.set(ExtHostContext.ExtHostEmbeddings, new ExtHostEmbeddings(rpcProtocol));
 	const extHostBrowsers = rpcProtocol.set(ExtHostContext.ExtHostBrowsers, new ExtHostBrowsers(rpcProtocol));
 	const extHostTestAiInterop = rpcProtocol.set(ExtHostContext.ExtHostTestAiInterop, new ExtHostTestAiInterop(rpcProtocol));
+	const extHostAiInterop = rpcProtocol.set(ExtHostContext.ExtHostAiInterop, new ExtHostAiInterop(rpcProtocol));
 
 	rpcProtocol.set(ExtHostContext.ExtHostMcp, accessor.get(IExtHostMpcService));
 
@@ -1839,6 +1841,38 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			}
 		};
 
+		// namespace: aiInterop
+		const aiInterop: typeof vscode.aiInterop = {
+			registerEndpoint(descriptor, handler) {
+				checkProposedApiEnabled(extension, 'aiInterop');
+				return extHostAiInterop.registerEndpoint(descriptor, handler);
+			},
+			invoke(callerId, targetId, request, token) {
+				checkProposedApiEnabled(extension, 'aiInterop');
+				return extHostAiInterop.invoke(callerId, targetId, request, token);
+			},
+			sendChunk(invocationId, chunk) {
+				checkProposedApiEnabled(extension, 'aiInterop');
+				return extHostAiInterop.sendChunk(invocationId, chunk);
+			},
+			complete(invocationId, result) {
+				checkProposedApiEnabled(extension, 'aiInterop');
+				return extHostAiInterop.complete(invocationId, result);
+			},
+			fail(invocationId, error) {
+				checkProposedApiEnabled(extension, 'aiInterop');
+				return extHostAiInterop.fail(invocationId, error);
+			},
+			getEndpoint(endpointId) {
+				checkProposedApiEnabled(extension, 'aiInterop');
+				return extHostAiInterop.getEndpoint(endpointId);
+			},
+			getAllEndpoints() {
+				checkProposedApiEnabled(extension, 'aiInterop');
+				return extHostAiInterop.getAllEndpoints();
+			}
+		};
+
 		// Expose test API for internal testing (not part of public API)
 		// This allows test extensions to access the RPC test infrastructure
 		const testAiInterop = {
@@ -1884,6 +1918,7 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			version: initData.version,
 			// namespaces
 			ai,
+			aiInterop,
 			authentication,
 			commands,
 			comments,

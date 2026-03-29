@@ -1765,13 +1765,87 @@ export interface ExtHostUrlsShape {
 export interface EndpointDescriptorDto {
 	id: string;
 	extensionId: string;
+	displayName: string;
+	description?: string;
+	capabilities: EndpointCapabilityDto[];
 	hostKind: 'local' | 'remote' | 'web';
 	remoteAuthority?: string;
+	metadata?: { [key: string]: any };
+}
+
+export interface EndpointCapabilityDto {
+	type: 'streaming' | 'tool' | 'mcp' | 'cli';
+	config?: { [key: string]: any };
+}
+
+export interface InvocationRequestDto {
+	prompt?: string;
+	context?: { [key: string]: any };
+	options?: InvocationOptionsDto;
+}
+
+export interface InvocationOptionsDto {
+	streaming?: boolean;
+	timeout?: number;
+	maxTokens?: number;
+	temperature?: number;
+}
+
+export interface InvocationChunkDto {
+	seq: number;
+	text: string;
+	metadata?: { [key: string]: any };
+}
+
+export interface InvocationDescriptorDto {
+	id: string;
+	callerId: string;
+	targetId: string;
+	sessionId?: string;
+	request: InvocationRequestDto;
+	status: 'pending' | 'running' | 'completed' | 'failed' | 'canceled';
+	startTime: number;
+	endTime?: number;
+	error?: AiInteropErrorDto;
+	metadata?: { [key: string]: any };
+}
+
+export interface AiInteropErrorDto {
+	code: string;
+	message: string;
+	details?: { [key: string]: any };
 }
 
 export const enum AiInteropErrorCode {
 	REMOTE_AUTHORITY_MISMATCH = 'REMOTE_AUTHORITY_MISMATCH',
 	HOST_KIND_UNSUPPORTED = 'HOST_KIND_UNSUPPORTED',
+}
+
+export interface MainThreadAiInteropShape extends IDisposable {
+	// Endpoint management
+	$registerEndpoint(descriptor: EndpointDescriptorDto): Promise<void>;
+	$unregisterEndpoint(endpointId: string): Promise<void>;
+
+	// Invocation management
+	$invoke(callerId: string, targetId: string, request: InvocationRequestDto, token: CancellationToken): Promise<string>;
+	$sendChunk(invocationId: string, chunk: InvocationChunkDto): Promise<void>;
+	$complete(invocationId: string, result?: any): Promise<void>;
+	$fail(invocationId: string, error: AiInteropErrorDto): Promise<void>;
+	$cancel(invocationId: string): Promise<void>;
+
+	// Query
+	$getEndpoint(endpointId: string): Promise<EndpointDescriptorDto | undefined>;
+	$getAllEndpoints(): Promise<EndpointDescriptorDto[]>;
+	$getInvocation(invocationId: string): Promise<InvocationDescriptorDto | undefined>;
+}
+
+export interface ExtHostAiInteropShape {
+	// Invocation callbacks
+	$onInvoke(invocationId: string, callerId: string, request: InvocationRequestDto, token: CancellationToken): Promise<void>;
+	$onChunk(invocationId: string, chunk: InvocationChunkDto): void;
+	$onComplete(invocationId: string, result?: any): void;
+	$onError(invocationId: string, error: AiInteropErrorDto): void;
+	$onCancel(invocationId: string): void;
 }
 
 export interface ExtHostTestAiInteropShape {
@@ -3844,6 +3918,7 @@ export const MainContext = {
 	MainThreadChatDebug: createProxyIdentifier<MainThreadChatDebugShape>('MainThreadChatDebug'),
 	MainThreadBrowsers: createProxyIdentifier<MainThreadBrowsersShape>('MainThreadBrowsers'),
 	MainThreadTestAiInterop: createProxyIdentifier<MainThreadTestAiInteropShape>('MainThreadTestAiInterop'),
+	MainThreadAiInterop: createProxyIdentifier<MainThreadAiInteropShape>('MainThreadAiInterop'),
 };
 
 export const ExtHostContext = {
@@ -3926,4 +4001,5 @@ export const ExtHostContext = {
 	ExtHostGitExtension: createProxyIdentifier<ExtHostGitExtensionShape>('ExtHostGitExtension'),
 	ExtHostBrowsers: createProxyIdentifier<ExtHostBrowsersShape>('ExtHostBrowsers'),
 	ExtHostTestAiInterop: createProxyIdentifier<ExtHostTestAiInteropShape>('ExtHostTestAiInterop'),
+	ExtHostAiInterop: createProxyIdentifier<ExtHostAiInteropShape>('ExtHostAiInterop'),
 };
