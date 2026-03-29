@@ -17,6 +17,18 @@
 			{
 				"command": "test-ai-interop.runTest",
 				"title": "Run AI Interop RPC Test"
+			},
+			{
+				"command": "test-ai-interop.testCancelBasic",
+				"title": "Test AI Interop Cancel - Basic"
+			},
+			{
+				"command": "test-ai-interop.testCancelImmediate",
+				"title": "Test AI Interop Cancel - Immediate"
+			},
+			{
+				"command": "test-ai-interop.testCancelConcurrent",
+				"title": "Test AI Interop Cancel - Concurrent"
 			}
 		]
 	},

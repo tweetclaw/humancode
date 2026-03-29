@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type * as vscode from 'vscode';
-import { CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { CancellationToken, CancellationTokenSource } from '../../../base/common/cancellation.js';
 import * as errors from '../../../base/common/errors.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { combinedDisposable } from '../../../base/common/lifecycle.js';
@@ -1847,9 +1847,13 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			sendChunk: (invocationId: string, seq: number, text: string) => {
 				return extHostTestAiInterop.sendChunk(invocationId, seq, text);
 			},
-			invoke: (invocationId: string) => {
+			invoke: (invocationId: string, token: CancellationToken) => {
 				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
-				return mainThreadProxy.$invoke(invocationId);
+				return mainThreadProxy.$invoke(invocationId, token);
+			},
+			onInvocationComplete: (invocationId: string) => {
+				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
+				return mainThreadProxy.$onInvocationComplete(invocationId);
 			},
 			getStats: (invocationId: string) => {
 				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);

@@ -1763,7 +1763,7 @@ export interface ExtHostUrlsShape {
 }
 
 export interface ExtHostTestAiInteropShape {
-	$onInvoke(invocationId: string): void;
+	$onInvoke(invocationId: string, token: CancellationToken): Promise<void>;
 	$onDidReceiveChunk(invocationId: string, seq: number, text: string, timestamp: number): void;
 }
 
@@ -2129,7 +2129,8 @@ export interface MainThreadTimelineShape extends IDisposable {
 
 export interface MainThreadTestAiInteropShape extends IDisposable {
 	$acceptChunk(invocationId: string, seq: number, text: string): void;
-	$invoke(invocationId: string): Promise<void>;
+	$invoke(invocationId: string, token: CancellationToken): Promise<void>;
+	$onInvocationComplete(invocationId: string): void;
 	$getStats(invocationId: string): any;
 	$clearStats(): void;
 }

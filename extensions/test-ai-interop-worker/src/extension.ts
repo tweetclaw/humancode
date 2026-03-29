@@ -6,8 +6,9 @@
 import * as vscode from 'vscode';
 
 interface TestAiInteropAPI {
-	onInvoke: vscode.Event<string>;
+	onInvoke: vscode.Event<{ invocationId: string; token: vscode.CancellationToken; resolve: () => void; reject: (err: any) => void }>;
 	sendChunk(invocationId: string, seq: number, text: string): Promise<void>;
+	onInvocationComplete(invocationId: string): Promise<void>;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -32,19 +33,33 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 
 		// Listen for invocations
-		const disposable = api.onInvoke(async (invocationId: string) => {
+		const disposable = api.onInvoke(async ({ invocationId, token, resolve, reject }) => {
 			console.log(`[Worker] Received invocation: ${invocationId}`);
 
 			try {
-				// Scenario 4: Concurrent calls - 50 chunks, 20ms interval
-				for (let i = 0; i < 50; i++) {
+				// Send 1000 chunks with 20ms interval, but respond to cancel
+				for (let i = 0; i < 1000; i++) {
+					// Check if cancellation was requested
+					if (token.isCancellationRequested) {
+						console.log(`[Worker] Canceled at chunk ${i}, invocationId: ${invocationId}`);
+						resolve(); // Resolve the promise to complete the RPC call
+						return;
+					}
+
 					await api.sendChunk(invocationId, i, `chunk-${i}`);
 					await sleep(20);
 				}
 
 				console.log(`[Worker] Completed invocation: ${invocationId}`);
+
+				// Notify completion for cleanup
+				await api.onInvocationComplete(invocationId);
+
+				// Resolve the promise to complete the RPC call
+				resolve();
 			} catch (error) {
 				console.error(`[Worker] Error during invocation ${invocationId}:`, error);
+				reject(error);
 			}
 		});
 

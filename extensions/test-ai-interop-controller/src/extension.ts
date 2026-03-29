@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 
 interface TestAiInteropAPI {
-	invoke(invocationId: string): Promise<void>;
+	invoke(invocationId: string, token: vscode.CancellationToken): Promise<void>;
 	onDidReceiveChunk: vscode.Event<{ invocationId: string; seq: number; text: string; timestamp: number }>;
 	getStats(invocationId: string): InvocationStats | undefined;
 	clearStats(): void;
@@ -58,6 +58,17 @@ async function waitForCompletion(
 	const startTime = Date.now();
 	while (received.length < expected && Date.now() - startTime < timeout) {
 		await sleep(100);
+	}
+}
+
+async function waitForChunks(
+	received: number[],
+	count: number,
+	timeout: number
+): Promise<void> {
+	const startTime = Date.now();
+	while (received.length < count && Date.now() - startTime < timeout) {
+		await sleep(50);
 	}
 }
 
@@ -117,8 +128,10 @@ export function activate(context: vscode.ExtensionContext) {
 					allReceived.set(id, { received: [], timestamps: [] });
 				});
 
-				// Start all workers in parallel
-				await Promise.all(invocationIds.map(id => api.invoke(id)));
+				// Start all workers in parallel without cancellation
+				const cts = new vscode.CancellationTokenSource();
+				await Promise.all(invocationIds.map(id => api.invoke(id, cts.token)));
+				cts.dispose();
 
 				// Wait for all workers to complete
 				await new Promise(resolve => setTimeout(resolve, 3000));
@@ -176,6 +189,202 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 
 		context.subscriptions.push(command);
+
+		// Scenario 1: Basic cancel
+		const testCancelBasic = vscode.commands.registerCommand('test-ai-interop.testCancelBasic', async () => {
+			const invocationId = `cancel-basic-${Date.now()}`;
+			const received: number[] = [];
+			let lastChunkTime = 0;
+
+			console.log(`[Controller] Starting basic cancel test with invocationId: ${invocationId}`);
+
+			// Subscribe to chunk received events
+			const disposable = api.onDidReceiveChunk((data) => {
+				if (data.invocationId === invocationId) {
+					received.push(data.seq);
+					lastChunkTime = Date.now(); // Update last chunk time
+				}
+			});
+
+			try {
+				// Create CancellationTokenSource
+				const cts = new vscode.CancellationTokenSource();
+
+				// Start invocation
+				const invokePromise = api.invoke(invocationId, cts.token);
+
+				// Wait for 50 chunks
+				await waitForChunks(received, 50, 5000);
+
+				const cancelTime = Date.now();
+				console.log(`[Controller] Canceling at chunk ${received.length}, time: ${cancelTime}`);
+				cts.cancel();
+
+				// Wait 100ms to ensure no new chunks (instead of 1000ms)
+				await sleep(100);
+
+				// Real latency = last chunk time - cancel time
+				const cancelLatency = lastChunkTime - cancelTime;
+				const chunksAfterCancel = received.filter(seq => seq > 50).length;
+
+				console.log(`[Controller] Cancel latency: ${cancelLatency}ms`);
+				console.log(`[Controller] Chunks received after cancel: ${chunksAfterCancel}`);
+				console.log(`[Controller] Last chunk seq: ${received[received.length - 1]}`);
+				console.log(`[Controller] Total chunks: ${received.length}`);
+
+				vscode.window.showInformationMessage(`Basic cancel test completed: latency=${cancelLatency}ms, total chunks=${received.length}`);
+
+				cts.dispose();
+			} catch (error) {
+				console.error(`[Controller] Basic cancel test failed:`, error);
+				vscode.window.showErrorMessage(`Basic cancel test failed: ${error}`);
+			} finally {
+				disposable.dispose();
+			}
+		});
+
+		// Scenario 2: Immediate cancel
+		const testCancelImmediate = vscode.commands.registerCommand('test-ai-interop.testCancelImmediate', async () => {
+			const invocationId = `cancel-immediate-${Date.now()}`;
+			const received: number[] = [];
+			let lastChunkTime = 0;
+
+			console.log(`[Controller] Starting immediate cancel test with invocationId: ${invocationId}`);
+
+			const disposable = api.onDidReceiveChunk((data) => {
+				if (data.invocationId === invocationId) {
+					received.push(data.seq);
+					lastChunkTime = Date.now();
+				}
+			});
+
+			try {
+				// Create CancellationTokenSource
+				const cts = new vscode.CancellationTokenSource();
+
+				// Start invocation
+				const invokePromise = api.invoke(invocationId, cts.token);
+
+				// Cancel immediately (no wait)
+				const cancelTime = Date.now();
+				cts.cancel();
+
+				// Wait 100ms (instead of 500ms)
+				await sleep(100);
+
+				// If chunks received, use last chunk time; otherwise use current time
+				const stopTime = received.length > 0 ? lastChunkTime : Date.now();
+				const cancelLatency = stopTime - cancelTime;
+
+				console.log(`[Controller] Immediate cancel latency: ${cancelLatency}ms`);
+				console.log(`[Controller] Chunks received: ${received.length}`);
+				console.log(`[Controller] Expected: 0 or very few chunks`);
+
+				vscode.window.showInformationMessage(`Immediate cancel test completed: latency=${cancelLatency}ms, chunks=${received.length}`);
+
+				cts.dispose();
+			} catch (error) {
+				console.error(`[Controller] Immediate cancel test failed:`, error);
+				vscode.window.showErrorMessage(`Immediate cancel test failed: ${error}`);
+			} finally {
+				disposable.dispose();
+			}
+		});
+
+		// Scenario 3: Concurrent cancel
+		const testCancelConcurrent = vscode.commands.registerCommand('test-ai-interop.testCancelConcurrent', async () => {
+			const numInvocations = 10;
+			const invocations: Array<{
+				id: string;
+				received: number[];
+				cts: vscode.CancellationTokenSource;
+				lastChunkTime: number;
+				cancelTime: number;
+			}> = [];
+
+			console.log(`[Controller] Starting concurrent cancel test with ${numInvocations} invocations`);
+
+			// Create 10 concurrent invocations
+			for (let i = 0; i < numInvocations; i++) {
+				const invocationId = `cancel-concurrent-${i}-${Date.now()}`;
+				const received: number[] = [];
+				const cts = new vscode.CancellationTokenSource();
+
+				const inv = {
+					id: invocationId,
+					received,
+					cts,
+					lastChunkTime: 0,
+					cancelTime: 0
+				};
+
+				invocations.push(inv);
+
+				// Subscribe to chunk received
+				api.onDidReceiveChunk((data) => {
+					if (data.invocationId === invocationId) {
+						received.push(data.seq);
+						inv.lastChunkTime = Date.now(); // Update last chunk time
+					}
+				});
+
+				// Start invocation
+				api.invoke(invocationId, cts.token);
+			}
+
+			try {
+				// Wait for all invocations to receive at least 20 chunks
+				await Promise.all(invocations.map(inv =>
+					waitForChunks(inv.received, 20, 5000)
+				));
+
+				// Cancel all invocations with random delays
+				for (const inv of invocations) {
+					const randomDelay = Math.random() * 500; // 0-500ms random delay
+					await sleep(randomDelay);
+
+					inv.cancelTime = Date.now();
+					inv.cts.cancel();
+				}
+
+				// Wait 100ms (instead of 1000ms)
+				await sleep(100);
+
+				// Calculate statistics
+				let totalLatency = 0;
+				let successCount = 0;
+
+				for (const inv of invocations) {
+					// Real latency = last chunk time - cancel time
+					const latency = inv.lastChunkTime - inv.cancelTime;
+					totalLatency += latency;
+
+					if (latency < 200) {
+						successCount++;
+					}
+
+					console.log(`[Controller] Invocation ${inv.id}: latency=${latency}ms, chunks=${inv.received.length}`);
+				}
+
+				const avgLatency = totalLatency / numInvocations;
+				const successRate = (successCount / numInvocations) * 100;
+
+				console.log(`[Controller] Average cancel latency: ${avgLatency}ms`);
+				console.log(`[Controller] Success rate (< 200ms): ${successRate}%`);
+
+				vscode.window.showInformationMessage(`Concurrent cancel test completed: avg latency=${avgLatency.toFixed(0)}ms, success rate=${successRate.toFixed(0)}%`);
+
+				// Cleanup
+				for (const inv of invocations) {
+					inv.cts.dispose();
+				}
+			} catch (error) {
+				console.error(`[Controller] Concurrent cancel test failed:`, error);
+				vscode.window.showErrorMessage(`Concurrent cancel test failed: ${error}`);
+			}
+		});
+
+		context.subscriptions.push(testCancelBasic, testCancelImmediate, testCancelConcurrent);
 	} catch (error) {
 		console.error('[Controller] Fatal error during activation:', error);
 		vscode.window.showErrorMessage(`[Controller] Fatal error: ${error}`);

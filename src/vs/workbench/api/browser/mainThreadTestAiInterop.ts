@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { ILogService } from '../../../platform/log/common/log.js';
@@ -62,7 +63,7 @@ export class MainThreadTestAiInterop extends Disposable implements MainThreadTes
 		this._logService.trace(`[TestAiInterop] Received chunk ${seq} for invocation ${invocationId}`);
 	}
 
-	async $invoke(invocationId: string): Promise<void> {
+	async $invoke(invocationId: string, token: CancellationToken): Promise<void> {
 		this._logService.info(`[TestAiInterop] Invoking worker with invocationId: ${invocationId}`);
 
 		// Initialize stats
@@ -72,8 +73,13 @@ export class MainThreadTestAiInterop extends Disposable implements MainThreadTes
 			startTime: Date.now()
 		});
 
-		// Notify ExtHost to trigger worker
-		this._proxy.$onInvoke(invocationId);
+		// Call $onInvoke which will return a Promise
+		// Pass the token from RPC layer to ExtHost
+		await this._proxy.$onInvoke(invocationId, token);
+	}
+
+	$onInvocationComplete(invocationId: string): void {
+		this._logService.info(`[MainThreadTestAiInterop] Completed invocation: ${invocationId}`);
 	}
 
 	$getStats(invocationId: string): InvocationStats | undefined {
