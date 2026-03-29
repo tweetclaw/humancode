@@ -9,6 +9,15 @@ interface TestAiInteropAPI {
 	onInvoke: vscode.Event<{ invocationId: string; token: vscode.CancellationToken; resolve: () => void; reject: (err: any) => void }>;
 	sendChunk(invocationId: string, seq: number, text: string): Promise<void>;
 	onInvocationComplete(invocationId: string): Promise<void>;
+	registerEndpoint(descriptor: EndpointDescriptor): void;
+	unregisterEndpoint(endpointId: string): void;
+}
+
+interface EndpointDescriptor {
+	id: string;
+	extensionId: string;
+	hostKind: 'local' | 'remote' | 'web';
+	remoteAuthority?: string;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -31,6 +40,20 @@ export function activate(context: vscode.ExtensionContext) {
 			vscode.window.showErrorMessage('[Worker] Test AI Interop API not available');
 			return;
 		}
+
+		// Register worker endpoint
+		const hostKind: 'local' | 'remote' | 'web' = vscode.env.remoteName ? 'remote' : 'local';
+		const remoteAuthority = vscode.env.remoteName;
+
+		const workerEndpoint: EndpointDescriptor = {
+			id: 'test-worker',
+			extensionId: 'vscode.test-ai-interop-worker',
+			hostKind: hostKind,
+			remoteAuthority: remoteAuthority
+		};
+
+		api.registerEndpoint(workerEndpoint);
+		console.log(`[Worker] Registered endpoint: id=${workerEndpoint.id}, hostKind=${hostKind}, remoteAuthority=${remoteAuthority || 'none'}`);
 
 		// Listen for invocations
 		const disposable = api.onInvoke(async ({ invocationId, token, resolve, reject }) => {

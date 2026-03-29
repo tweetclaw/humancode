@@ -1862,6 +1862,20 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			clearStats: () => {
 				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
 				return mainThreadProxy.$clearStats();
+			},
+			registerEndpoint: (descriptor: any) => {
+				return extHostTestAiInterop.registerEndpoint(descriptor);
+			},
+			unregisterEndpoint: (endpointId: string) => {
+				return extHostTestAiInterop.unregisterEndpoint(endpointId);
+			},
+			invokeWithRouting: (callerId: string, targetId: string, invocationId: string, token: CancellationToken) => {
+				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
+				return mainThreadProxy.$invokeWithRouting(callerId, targetId, invocationId, token);
+			},
+			getAuditLog: () => {
+				const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadTestAiInterop);
+				return mainThreadProxy.$getAuditLog();
 			}
 		};
 

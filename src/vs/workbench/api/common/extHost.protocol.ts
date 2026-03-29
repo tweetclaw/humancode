@@ -1762,6 +1762,18 @@ export interface ExtHostUrlsShape {
 	$handleExternalUri(handle: number, uri: UriComponents): Promise<void>;
 }
 
+export interface EndpointDescriptorDto {
+	id: string;
+	extensionId: string;
+	hostKind: 'local' | 'remote' | 'web';
+	remoteAuthority?: string;
+}
+
+export const enum AiInteropErrorCode {
+	REMOTE_AUTHORITY_MISMATCH = 'REMOTE_AUTHORITY_MISMATCH',
+	HOST_KIND_UNSUPPORTED = 'HOST_KIND_UNSUPPORTED',
+}
+
 export interface ExtHostTestAiInteropShape {
 	$onInvoke(invocationId: string, token: CancellationToken): Promise<void>;
 	$onDidReceiveChunk(invocationId: string, seq: number, text: string, timestamp: number): void;
@@ -2133,6 +2145,10 @@ export interface MainThreadTestAiInteropShape extends IDisposable {
 	$onInvocationComplete(invocationId: string): void;
 	$getStats(invocationId: string): any;
 	$clearStats(): void;
+	$registerEndpoint(descriptor: EndpointDescriptorDto): void;
+	$unregisterEndpoint(endpointId: string): void;
+	$invokeWithRouting(callerId: string, targetId: string, invocationId: string, token: CancellationToken): Promise<void>;
+	$getAuditLog(): Promise<any[]>;
 }
 
 export interface HoverWithId extends languages.Hover {

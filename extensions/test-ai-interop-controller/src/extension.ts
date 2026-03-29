@@ -10,6 +10,31 @@ interface TestAiInteropAPI {
 	onDidReceiveChunk: vscode.Event<{ invocationId: string; seq: number; text: string; timestamp: number }>;
 	getStats(invocationId: string): InvocationStats | undefined;
 	clearStats(): void;
+	registerEndpoint(descriptor: EndpointDescriptor): void;
+	unregisterEndpoint(endpointId: string): void;
+	invokeWithRouting(callerId: string, targetId: string, invocationId: string, token: vscode.CancellationToken): Promise<void>;
+	getAuditLog(): AuditLogEntry[];
+}
+
+interface EndpointDescriptor {
+	id: string;
+	extensionId: string;
+	hostKind: 'local' | 'remote' | 'web';
+	remoteAuthority?: string;
+}
+
+interface AuditLogEntry {
+	type: 'invocation_rejected' | 'invocation_success';
+	timestamp: number;
+	callerId: string;
+	targetId: string;
+	reason?: string;
+	details?: {
+		callerHostKind?: string;
+		callerRemoteAuthority?: string;
+		targetHostKind?: string;
+		targetRemoteAuthority?: string;
+	};
 }
 
 interface ChunkData {
@@ -385,6 +410,148 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 
 		context.subscriptions.push(testCancelBasic, testCancelImmediate, testCancelConcurrent);
+
+		// Routing test command
+		const testRouting = vscode.commands.registerCommand('test-ai-interop.testRouting', async () => {
+			console.log('[Controller] Starting routing test');
+
+			try {
+				// Get hostKind and remoteAuthority from environment
+				const hostKind: 'local' | 'remote' | 'web' = vscode.env.remoteName ? 'remote' : 'local';
+				const remoteAuthority = vscode.env.remoteName;
+
+				console.log(`[Controller] Current environment: hostKind=${hostKind}, remoteAuthority=${remoteAuthority || 'none'}`);
+
+				// Register controller endpoint
+				const controllerEndpoint: EndpointDescriptor = {
+					id: 'test-controller',
+					extensionId: 'vscode.test-ai-interop-controller',
+					hostKind: hostKind,
+					remoteAuthority: remoteAuthority
+				};
+				api.registerEndpoint(controllerEndpoint);
+
+				// Register worker endpoint (same host)
+				const workerEndpoint: EndpointDescriptor = {
+					id: 'test-worker',
+					extensionId: 'vscode.test-ai-interop-worker',
+					hostKind: hostKind,
+					remoteAuthority: remoteAuthority
+				};
+				api.registerEndpoint(workerEndpoint);
+
+				// Scenario 1: Same host call (local -> local) - should succeed
+				console.log('[Controller] Scenario 1: Same host call (local -> local)');
+				try {
+					const invocationId1 = `routing-test-1-${Date.now()}`;
+					const cts1 = new vscode.CancellationTokenSource();
+					await api.invokeWithRouting('test-controller', 'test-worker', invocationId1, cts1.token);
+					console.log('[Controller] ✓ Scenario 1 passed: Same host call succeeded');
+					cts1.dispose();
+				} catch (error) {
+					console.error('[Controller] ✗ Scenario 1 failed:', error);
+				}
+
+				// Scenario 2: Simulate cross-host call (local -> remote)
+				console.log('[Controller] Scenario 2: Cross-host call (local -> remote)');
+				const remoteWorkerEndpoint: EndpointDescriptor = {
+					id: 'test-worker-remote',
+					extensionId: 'vscode.test-ai-interop-worker',
+					hostKind: 'remote',
+					remoteAuthority: 'ssh://test-host'
+				};
+				api.registerEndpoint(remoteWorkerEndpoint);
+
+				try {
+					const invocationId2 = `routing-test-2-${Date.now()}`;
+					const cts2 = new vscode.CancellationTokenSource();
+					await api.invokeWithRouting('test-controller', 'test-worker-remote', invocationId2, cts2.token);
+					console.log('[Controller] ✓ Scenario 2 passed: Cross-host call succeeded (policy allows)');
+					cts2.dispose();
+				} catch (error) {
+					console.log('[Controller] ✓ Scenario 2: Cross-host call handled as expected:', error);
+				}
+
+				// Scenario 3: Remote authority mismatch (remote(A) -> remote(B)) - should reject
+				console.log('[Controller] Scenario 3: Remote authority mismatch');
+				const controllerRemoteA: EndpointDescriptor = {
+					id: 'test-controller-remote-a',
+					extensionId: 'vscode.test-ai-interop-controller',
+					hostKind: 'remote',
+					remoteAuthority: 'ssh://host-a'
+				};
+				api.registerEndpoint(controllerRemoteA);
+
+				const workerRemoteB: EndpointDescriptor = {
+					id: 'test-worker-remote-b',
+					extensionId: 'vscode.test-ai-interop-worker',
+					hostKind: 'remote',
+					remoteAuthority: 'ssh://host-b'
+				};
+				api.registerEndpoint(workerRemoteB);
+
+				try {
+					const invocationId3 = `routing-test-3-${Date.now()}`;
+					const cts3 = new vscode.CancellationTokenSource();
+					await api.invokeWithRouting('test-controller-remote-a', 'test-worker-remote-b', invocationId3, cts3.token);
+					console.error('[Controller] ✗ Scenario 3 failed: Should have rejected remote authority mismatch');
+					cts3.dispose();
+				} catch (error: any) {
+					if (error.message && error.message.includes('REMOTE_AUTHORITY_MISMATCH')) {
+						console.log('[Controller] ✓ Scenario 3 passed: Remote authority mismatch rejected correctly');
+					} else {
+						console.error('[Controller] ✗ Scenario 3 failed with unexpected error:', error);
+					}
+				}
+
+				// Scenario 4: Incompatible host kinds (web -> local) - should reject
+				console.log('[Controller] Scenario 4: Incompatible host kinds (web -> local)');
+				const controllerWeb: EndpointDescriptor = {
+					id: 'test-controller-web',
+					extensionId: 'vscode.test-ai-interop-controller',
+					hostKind: 'web',
+					remoteAuthority: undefined
+				};
+				api.registerEndpoint(controllerWeb);
+
+				const workerLocal: EndpointDescriptor = {
+					id: 'test-worker-local',
+					extensionId: 'vscode.test-ai-interop-worker',
+					hostKind: 'local',
+					remoteAuthority: undefined
+				};
+				api.registerEndpoint(workerLocal);
+
+				try {
+					const invocationId4 = `routing-test-4-${Date.now()}`;
+					const cts4 = new vscode.CancellationTokenSource();
+					await api.invokeWithRouting('test-controller-web', 'test-worker-local', invocationId4, cts4.token);
+					console.error('[Controller] ✗ Scenario 4 failed: Should have rejected web -> local');
+					cts4.dispose();
+				} catch (error: any) {
+					if (error.message && error.message.includes('HOST_KIND_UNSUPPORTED')) {
+						console.log('[Controller] ✓ Scenario 4 passed: web -> local rejected correctly');
+					} else {
+						console.error('[Controller] ✗ Scenario 4 failed with unexpected error:', error);
+					}
+				}
+
+				// Check audit log
+				const auditLog = await api.getAuditLog();
+				console.log('[Controller] Audit log entries:', auditLog.length);
+				auditLog.forEach((entry, index) => {
+					console.log(`[Controller] Audit[${index}]: ${entry.type}, reason: ${entry.reason || 'none'}`);
+				});
+
+				vscode.window.showInformationMessage('Routing test completed. Check console for results.');
+
+			} catch (error) {
+				console.error('[Controller] Routing test failed:', error);
+				vscode.window.showErrorMessage(`Routing test failed: ${error}`);
+			}
+		});
+
+		context.subscriptions.push(testRouting);
 	} catch (error) {
 		console.error('[Controller] Fatal error during activation:', error);
 		vscode.window.showErrorMessage(`[Controller] Fatal error: ${error}`);

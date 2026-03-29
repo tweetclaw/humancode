@@ -5,8 +5,7 @@
 
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter } from '../../../base/common/event.js';
-import { IMainContext } from './extHost.protocol.js';
-import { ExtHostTestAiInteropShape, MainContext, MainThreadTestAiInteropShape } from './extHost.protocol.js';
+import { EndpointDescriptorDto, ExtHostTestAiInteropShape, IMainContext, MainContext, MainThreadTestAiInteropShape } from './extHost.protocol.js';
 
 export class ExtHostTestAiInterop implements ExtHostTestAiInteropShape {
 
@@ -43,5 +42,24 @@ export class ExtHostTestAiInterop implements ExtHostTestAiInteropShape {
 	async onInvocationComplete(invocationId: string): Promise<void> {
 		this._pendingInvocations.delete(invocationId);
 		return this._proxy.$onInvocationComplete(invocationId);
+	}
+
+	registerEndpoint(descriptor: EndpointDescriptorDto): void {
+		this._proxy.$registerEndpoint(descriptor);
+	}
+
+	unregisterEndpoint(endpointId: string): void {
+		this._proxy.$unregisterEndpoint(endpointId);
+	}
+
+	async invokeWithRouting(callerId: string, targetId: string, invocationId: string, token: CancellationToken): Promise<void> {
+		// The actual routing logic is in MainThread
+		// This is just a pass-through that will be exposed to extensions
+		return new Promise<void>((resolve, reject) => {
+			this._pendingInvocations.set(invocationId, { resolve, reject });
+			// We need to call the MainThread method that does routing
+			// For now, we'll just call $invoke which will be enhanced in MainThread
+			this._proxy.$invoke(invocationId, token).then(resolve, reject);
+		});
 	}
 }

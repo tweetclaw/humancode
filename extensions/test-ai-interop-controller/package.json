@@ -29,6 +29,10 @@
 			{
 				"command": "test-ai-interop.testCancelConcurrent",
 				"title": "Test AI Interop Cancel - Concurrent"
+			},
+			{
+				"command": "test-ai-interop.testRouting",
+				"title": "Test AI Interop Routing"
 			}
 		]
 	},
