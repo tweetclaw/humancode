@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type * as vscode from 'vscode';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import {
@@ -16,15 +15,63 @@ import {
 	AiInteropErrorDto
 } from './extHost.protocol.js';
 
+// Internal type definitions to avoid vscode namespace dependency during compilation
+interface AiInteropInvocationRequest {
+	prompt?: string;
+	context?: { [key: string]: any };
+	options?: {
+		streaming?: boolean;
+		timeout?: number;
+		maxTokens?: number;
+		temperature?: number;
+	};
+}
+
+interface AiInteropChunk {
+	seq: number;
+	text: string;
+	metadata?: { [key: string]: any };
+}
+
+interface AiInteropError {
+	code: string;
+	message: string;
+	details?: { [key: string]: any };
+}
+
+interface AiInteropEndpointCapability {
+	type: 'streaming' | 'tool' | 'mcp' | 'cli';
+	config?: { [key: string]: any };
+}
+
+interface AiInteropEndpointDescriptor {
+	id: string;
+	extensionId: string;
+	displayName: string;
+	description?: string;
+	capabilities: AiInteropEndpointCapability[];
+	hostKind: 'local' | 'remote' | 'web';
+	remoteAuthority?: string;
+	metadata?: { [key: string]: any };
+}
+
+interface AiInteropInvocationHandle {
+	invocationId: string;
+	onChunk: Event<AiInteropChunk>;
+	onComplete: Event<any>;
+	onError: Event<AiInteropError>;
+	cancel(): void;
+}
+
 export class ExtHostAiInterop implements ExtHostAiInteropShape {
 
 	private readonly _proxy: MainThreadAiInteropShape;
-	private readonly _invocationHandlers = new Map<string, (request: vscode.AiInteropInvocationRequest, token: vscode.CancellationToken) => Promise<void>>();
+	private readonly _invocationHandlers = new Map<string, (request: AiInteropInvocationRequest, token: CancellationToken) => Promise<void>>();
 
 	// Event emitters
-	private readonly _onDidReceiveChunk = new Emitter<{ invocationId: string; chunk: vscode.AiInteropChunk }>();
+	private readonly _onDidReceiveChunk = new Emitter<{ invocationId: string; chunk: AiInteropChunk }>();
 	private readonly _onDidComplete = new Emitter<{ invocationId: string; result?: any }>();
-	private readonly _onDidError = new Emitter<{ invocationId: string; error: vscode.AiInteropError }>();
+	private readonly _onDidError = new Emitter<{ invocationId: string; error: AiInteropError }>();
 	private readonly _onDidCancel = new Emitter<string>();
 
 	constructor(mainContext: IMainContext) {
@@ -77,9 +124,9 @@ export class ExtHostAiInterop implements ExtHostAiInteropShape {
 	// ========================================
 
 	registerEndpoint(
-		descriptor: vscode.AiInteropEndpointDescriptor,
-		handler: (request: vscode.AiInteropInvocationRequest, token: vscode.CancellationToken) => Promise<void>
-	): vscode.Disposable {
+		descriptor: AiInteropEndpointDescriptor,
+		handler: (request: AiInteropInvocationRequest, token: CancellationToken) => Promise<void>
+	): { dispose(): void } {
 		const endpointId = descriptor.id;
 		this._invocationHandlers.set(endpointId, handler);
 
@@ -105,9 +152,9 @@ export class ExtHostAiInterop implements ExtHostAiInteropShape {
 	async invoke(
 		callerId: string,
 		targetId: string,
-		request: vscode.AiInteropInvocationRequest,
-		token: vscode.CancellationToken
-	): Promise<vscode.AiInteropInvocationHandle> {
+		request: AiInteropInvocationRequest,
+		token: CancellationToken
+	): Promise<AiInteropInvocationHandle> {
 		const invocationId = await this._proxy.$invoke(callerId, targetId, {
 			prompt: request.prompt,
 			context: request.context,
@@ -116,14 +163,23 @@ export class ExtHostAiInterop implements ExtHostAiInteropShape {
 
 		return {
 			invocationId,
-			onChunk: Event.filter(this._onDidReceiveChunk.event, e => e.invocationId === invocationId, (e): vscode.AiInteropChunk => e.chunk),
-			onComplete: Event.filter(this._onDidComplete.event, e => e.invocationId === invocationId, (e): any => e.result),
-			onError: Event.filter(this._onDidError.event, e => e.invocationId === invocationId, (e): vscode.AiInteropError => e.error),
+			onChunk: Event.map(
+				Event.filter(this._onDidReceiveChunk.event, e => e.invocationId === invocationId),
+				e => e.chunk
+			),
+			onComplete: Event.map(
+				Event.filter(this._onDidComplete.event, e => e.invocationId === invocationId),
+				e => e.result
+			),
+			onError: Event.map(
+				Event.filter(this._onDidError.event, e => e.invocationId === invocationId),
+				e => e.error
+			),
 			cancel: () => this._proxy.$cancel(invocationId)
 		};
 	}
 
-	async sendChunk(invocationId: string, chunk: vscode.AiInteropChunk): Promise<void> {
+	async sendChunk(invocationId: string, chunk: AiInteropChunk): Promise<void> {
 		await this._proxy.$sendChunk(invocationId, {
 			seq: chunk.seq,
 			text: chunk.text,
@@ -135,7 +191,7 @@ export class ExtHostAiInterop implements ExtHostAiInteropShape {
 		await this._proxy.$complete(invocationId, result);
 	}
 
-	async fail(invocationId: string, error: vscode.AiInteropError): Promise<void> {
+	async fail(invocationId: string, error: AiInteropError): Promise<void> {
 		await this._proxy.$fail(invocationId, {
 			code: error.code,
 			message: error.message,
@@ -143,7 +199,7 @@ export class ExtHostAiInterop implements ExtHostAiInteropShape {
 		});
 	}
 
-	async getEndpoint(endpointId: string): Promise<vscode.AiInteropEndpointDescriptor | undefined> {
+	async getEndpoint(endpointId: string): Promise<AiInteropEndpointDescriptor | undefined> {
 		const dto = await this._proxy.$getEndpoint(endpointId);
 		if (!dto) {
 			return undefined;
@@ -160,7 +216,7 @@ export class ExtHostAiInterop implements ExtHostAiInteropShape {
 		};
 	}
 
-	async getAllEndpoints(): Promise<vscode.AiInteropEndpointDescriptor[]> {
+	async getAllEndpoints(): Promise<AiInteropEndpointDescriptor[]> {
 		const dtos = await this._proxy.$getAllEndpoints();
 		return dtos.map(dto => ({
 			id: dto.id,

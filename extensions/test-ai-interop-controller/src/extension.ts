@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { testSessionManagement, testPermissionControl, testAuditLog, testE2EIntegration } from './e2e-tests.js';
 
 interface TestAiInteropAPI {
 	invoke(invocationId: string, token: vscode.CancellationToken): Promise<void>;
@@ -108,14 +109,8 @@ function percentile(values: number[], p: number): number {
 
 export function activate(context: vscode.ExtensionContext) {
 	try {
-		console.log('[Controller] Test AI Interop Controller extension activated');
-		console.log('[Controller] vscode object keys:', Object.keys(vscode).filter(k => k.includes('test') || k.includes('Test')));
-
 		// Get the internal test API
 		const api = (vscode as any).testAiInterop as TestAiInteropAPI | undefined;
-
-		console.log('[Controller] testAiInterop API:', api ? 'available' : 'NOT AVAILABLE');
-		console.log('[Controller] testAiInterop type:', typeof api);
 
 		if (!api) {
 			console.error('[Controller] Test AI Interop API not available');
@@ -552,6 +547,14 @@ export function activate(context: vscode.ExtensionContext) {
 		});
 
 		context.subscriptions.push(testRouting);
+
+		// E2E Integration Tests
+		const testSessionMgmt = vscode.commands.registerCommand('test-ai-interop.testSessionManagement', testSessionManagement);
+		const testPermControl = vscode.commands.registerCommand('test-ai-interop.testPermissionControl', testPermissionControl);
+		const testAudit = vscode.commands.registerCommand('test-ai-interop.testAuditLog', testAuditLog);
+		const testE2E = vscode.commands.registerCommand('test-ai-interop.testE2EIntegration', testE2EIntegration);
+
+		context.subscriptions.push(testSessionMgmt, testPermControl, testAudit, testE2E);
 	} catch (error) {
 		console.error('[Controller] Fatal error during activation:', error);
 		vscode.window.showErrorMessage(`[Controller] Fatal error: ${error}`);

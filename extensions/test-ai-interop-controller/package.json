@@ -5,6 +5,9 @@
 	"version": "0.0.1",
 	"publisher": "vscode",
 	"private": true,
+	"enabledApiProposals": [
+		"aiInterop"
+	],
 	"engines": {
 		"vscode": "^1.99.0"
 	},
@@ -33,6 +36,22 @@
 			{
 				"command": "test-ai-interop.testRouting",
 				"title": "Test AI Interop Routing"
+			},
+			{
+				"command": "test-ai-interop.testSessionManagement",
+				"title": "Test AI Interop Session Management"
+			},
+			{
+				"command": "test-ai-interop.testPermissionControl",
+				"title": "Test AI Interop Permission Control"
+			},
+			{
+				"command": "test-ai-interop.testAuditLog",
+				"title": "Test AI Interop Audit Log"
+			},
+			{
+				"command": "test-ai-interop.testE2EIntegration",
+				"title": "Test AI Interop E2E Integration"
 			}
 		]
 	},

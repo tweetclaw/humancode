@@ -26,14 +26,8 @@ function sleep(ms: number): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext) {
 	try {
-		console.log('[Worker] Test AI Interop Worker extension activated');
-		console.log('[Worker] vscode object keys:', Object.keys(vscode).filter(k => k.includes('test') || k.includes('Test')));
-
 		// Get the internal test API
 		const api = (vscode as any).testAiInterop as TestAiInteropAPI | undefined;
-
-		console.log('[Worker] testAiInterop API:', api ? 'available' : 'NOT AVAILABLE');
-		console.log('[Worker] testAiInterop type:', typeof api);
 
 		if (!api) {
 			console.error('[Worker] Test AI Interop API not available');

@@ -102,6 +102,7 @@ import './mainThreadMeteredConnection.js';
 import './mainThreadGitExtensionService.js';
 import './mainThreadBrowsers.js';
 import './mainThreadTestAiInterop.js';
+import './mainThreadAiInterop.js';
 
 export class ExtensionPoints implements IWorkbenchContribution {
 

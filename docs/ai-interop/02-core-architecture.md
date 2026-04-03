@@ -59,14 +59,15 @@ AI Interop 必须遵守这一架构风格，而不是自造一套旁路通道。
 1. AI Interop Bus
 2. AI Session Broker
 3. Capability / Permission Layer
-4. Adapter Layer
+4. **Zero-Intrusion Adapter Layer** (核心桥接层)
 5. Observability / Audit Layer
 
 其中：
 
 - **Workbench services** 承担内核状态与编排；
 - **MainThread / ExtHost API bridge** 承担平台与扩展之间的 RPC 边界；
-- **Workbench contrib** 承担权限弹窗、审计面板与调试入口。
+- **Workbench contrib** 承担权限弹窗、审计面板与调试入口；
+- **Zero-Intrusion Adapter Layer** 承担现有 AI 扩展的自动发现和零侵入式接入。
 
 ## 4. 模块职责
 
@@ -103,13 +104,24 @@ AI Interop 必须遵守这一架构风格，而不是自造一套旁路通道。
 - 工具/CLI/MCP 高风险审批；
 - remoteAuthority / hostKind 策略判断。
 
-### 4.4 Adapter Layer
+### 4.4 Zero-Intrusion Adapter Layer
+
+**定位升级**：从"可选兼容层"升级为"核心桥接层"
 
 职责：
 
-- 把 commands、chat participant、tool、MCP、webview、CLI 统一投影成 endpoint / tool endpoint；
-- 为非原生生态提供兼容；
-- 对不同接入能力提供降级策略。
+- **自动发现**：扫描和监听现有 AI 扩展的注册（Chat Participant、Language Model、Command 等）
+- **零侵入包装**：自动将现有 VS Code API 包装为 AI Interop Endpoint，无需扩展修改代码
+- **协议转换**：双向转换 AI Interop 协议和现有 API（vscode.chat、vscode.lm、vscode.commands）
+- **能力映射**：将现有 API 的能力（流式、Cancel、上下文）映射为 AI Interop 能力
+- **降级支持**：为不支持的功能提供降级方案
+
+**关键特性**：
+- 现有 AI 扩展（GitHub Copilot、Lingma 等）无需修改即可接入
+- 平台启动时自动扫描并适配所有 AI 能力
+- 支持渐进增强：扩展可选择主动适配以获得更好功能
+
+**详细设计**：参见 [13-zero-intrusion-adapter-architecture.md](13-zero-intrusion-adapter-architecture.md)
 
 ### 4.5 Observability / Audit Layer
 
@@ -124,8 +136,26 @@ AI Interop 必须遵守这一架构风格，而不是自造一套旁路通道。
 ## 5. 模块交互图
 
 ```mermaid
-flowchart LR
+flowchart TB
+  subgraph EXISTING[现有 AI 扩展 - 无需修改]
+    COPILOT[GitHub Copilot]
+    LINGMA[Lingma]
+    OTHER[其他 AI 扩展]
+  end
+
+  subgraph VSCODE_API[VS Code 标准 API]
+    CHAT_API[vscode.chat API]
+    LM_API[vscode.lm API]
+    CMD_API[vscode.commands API]
+  end
+
   subgraph WB[Workbench]
+    subgraph ADAPTER[Zero-Intrusion Adapter Layer]
+      CHAT_ADAPTER[Chat Participant Adapter]
+      LM_ADAPTER[Language Model Adapter]
+      CMD_ADAPTER[Command Adapter]
+    end
+    
     BUS[AI Interop Bus]
     SB[AI Session Broker]
     POL[Permission / Policy]
@@ -139,17 +169,26 @@ flowchart LR
     PROTO[extHost.protocol.ts]
   end
 
-  subgraph EXTS[Extension Hosts]
+  subgraph NEW_EXTS[新开发的 AI 扩展 - 主动适配]
     CTRL[Controller Extension]
     WORKER[Worker Extension]
-    TOOL[Tool / MCP / CLI Adapter]
-    WV[Webview Host Extension]
   end
+
+  COPILOT --> CHAT_API
+  COPILOT --> LM_API
+  LINGMA --> CHAT_API
+  OTHER --> CMD_API
+
+  CHAT_API --> CHAT_ADAPTER
+  LM_API --> LM_ADAPTER
+  CMD_API --> CMD_ADAPTER
+
+  CHAT_ADAPTER --> BUS
+  LM_ADAPTER --> BUS
+  CMD_ADAPTER --> BUS
 
   CTRL --> EH
   WORKER --> EH
-  TOOL --> EH
-  WV --> EH
 
   EH <--> MT
   PROTO -. defines .- EH
@@ -177,6 +216,10 @@ flowchart LR
 - `src/vs/workbench/services/aiInterop/browser/aiSessionBroker.ts`
 - `src/vs/workbench/services/aiInterop/browser/aiInteropPolicyService.ts`
 - `src/vs/workbench/services/aiInterop/browser/aiInteropAuditService.ts`
+- **Zero-Intrusion Adapter Layer (新增)**:
+  - `src/vs/workbench/services/aiInterop/browser/adapters/chatParticipantAdapter.ts`
+  - `src/vs/workbench/services/aiInterop/browser/adapters/languageModelAdapter.ts`
+  - `src/vs/workbench/services/aiInterop/browser/adapters/commandAdapter.ts`
 
 ### 6.2 api bridge
 

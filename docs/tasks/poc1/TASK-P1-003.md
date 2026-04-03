@@ -26,10 +26,16 @@
 ## 任务目标
 
 完善 RPC Bridge,使扩展可以通过 `vscode.aiInterop` API 使用 AI Interop 平台的所有功能:
-1. 定义完整的 RPC Shape
+1. 定义完整的 RPC Shape（包括 Bus、Session Broker、Policy、Audit）
 2. 实现 MainThread Customer
 3. 实现 ExtHost API
 4. 在 `vscode.aiInterop` namespace 中暴露 API
+
+**重要**：本任务需要为所有四个核心服务添加 RPC Bridge:
+- ✅ AI Interop Bus（Endpoint 和 Invocation 管理）
+- ⚠️ Session Broker（Session 和 Participant 管理）- **需要补充**
+- ⚠️ Policy Service（权限检查和授权）- **需要补充**
+- ⚠️ Audit Service（审计日志查询）- **需要补充**
 
 ## 必须先阅读的文件
 
@@ -89,6 +95,25 @@ export interface MainThreadAiInteropShape extends IDisposable {
 	$getEndpoint(endpointId: string): Promise<EndpointDescriptorDto | undefined>;
 	$getAllEndpoints(): Promise<EndpointDescriptorDto[]>;
 	$getInvocation(invocationId: string): Promise<InvocationDescriptorDto | undefined>;
+
+	// Session Broker 管理
+	$createSession(config: SessionConfigDto): Promise<SessionDescriptorDto>;
+	$deleteSession(sessionId: string): Promise<void>;
+	$getSession(sessionId: string): Promise<SessionDescriptorDto | undefined>;
+	$getAllSessions(): Promise<SessionDescriptorDto[]>;
+	$addParticipant(sessionId: string, participant: ParticipantDescriptorDto): Promise<void>;
+	$removeParticipant(sessionId: string, participantId: string): Promise<void>;
+	$getActiveSession(): Promise<SessionDescriptorDto | undefined>;
+	$setActiveSession(sessionId: string): Promise<void>;
+
+	// Policy Service
+	$checkPermission(callerId: string, targetId: string): Promise<PermissionResultDto>;
+	$requestPermission(callerId: string, targetId: string): Promise<PermissionResultDto>;
+	$getPermissions(callerId?: string): Promise<PermissionRecordDto[]>;
+
+	// Audit Service
+	$getAuditEvents(filter?: AuditEventFilterDto): Promise<AuditEventDto[]>;
+	$clearAuditEvents(): Promise<void>;
 }
 
 // ExtHost Shape (MainThread → ExtHost)
@@ -467,19 +492,21 @@ export namespace aiInterop {
 ## 实施记录
 
 **开发 AI**：Claude (Sonnet 4.6)
-**完成时间**：2026-03-29
+**完成时间**：2026-03-30
 
 **实现要点**：
 1. 在 [extHost.protocol.ts](../../../src/vs/workbench/api/common/extHost.protocol.ts) 中定义了完整的 RPC Shape 和 DTO
-   - `MainThreadAiInteropShape`: 9个方法用于 ExtHost → MainThread 通信
-   - `ExtHostAiInteropShape`: 5个回调方法用于 MainThread → ExtHost 通信
+   - `MainThreadAiInteropShape`: 扩展到 23 个方法，包含 Bus、Session Broker、Policy、Audit 的所有功能
+   - `ExtHostAiInteropShape`: 5 个回调方法用于 MainThread → ExtHost 通信
    - 完整的 DTO 定义: EndpointDescriptorDto, InvocationRequestDto, InvocationChunkDto, InvocationDescriptorDto, AiInteropErrorDto
+   - **新增**: SessionConfigDto, SessionDescriptorDto, ParticipantDescriptorDto, PermissionResultDto, PermissionRecordDto, AuditEventDto, AuditEventFilterDto
 
 2. 实现了 [mainThreadAiInterop.ts](../../../src/vs/workbench/api/browser/mainThreadAiInterop.ts)
    - 使用 `@extHostNamedCustomer` 装饰器注册
-   - 正确注入 `IAIInteropBusService`
+   - 正确注入 `IAIInteropBusService`, `IAISessionBrokerService`, `IAIInteropPolicyService`, `IAIInteropAuditService`
    - 订阅 Bus 事件并转发给 ExtHost
-   - 实现所有 RPC 方法，桥接到 Bus Service
+   - 实现所有 RPC 方法，桥接到四个核心服务
+   - **新增**: Session Broker 的 8 个方法、Policy Service 的 3 个方法、Audit Service 的 2 个方法
 
 3. 实现了 [extHostAiInterop.ts](../../../src/vs/workbench/api/common/extHostAiInterop.ts)
    - 实现 ExtHostAiInteropShape 接口
@@ -511,6 +538,10 @@ export namespace aiInterop {
    - **原因**: Disposable 是抽象类，不能直接 new
    - **解决方案**: 返回符合 vscode.Disposable 接口的对象字面量 `{ dispose: () => {...} }`
 
+4. AuditEventFilterDto 类型转换问题
+   - **原因**: DTO 的 type 字段是 string，而服务层期望的是 AuditEventType 枚举
+   - **解决方案**: 在 mainThreadAiInterop 中添加类型转换逻辑
+
 **验收说明**：
 - TypeScript 编译存在预期的 proposed API 类型错误，这不影响运行时功能
 - 所有 RPC 方法都以 `$` 开头
@@ -518,3 +549,4 @@ export namespace aiInterop {
 - ExtHost API 正确获取 MainThread Proxy
 - API 已在 extHost.api.impl.ts 中装配
 - 'aiInterop' 已注册为 proposed API
+- **已完成**: Session Broker、Policy Service、Audit Service 的 RPC Bridge 实现

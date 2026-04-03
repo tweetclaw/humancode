@@ -6,7 +6,7 @@
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { IExtHostContext, extHostNamedCustomer } from '../../services/extensions/common/extHostCustomers.js';
-import { IAIInteropBusService } from '../../services/aiInterop/common/aiInterop.js';
+import { IAIInteropBusService, IAISessionBrokerService, IAIInteropPolicyService, IAIInteropAuditService } from '../../services/aiInterop/common/aiInterop.js';
 import {
 	ExtHostContext,
 	ExtHostAiInteropShape,
@@ -16,7 +16,14 @@ import {
 	InvocationRequestDto,
 	InvocationChunkDto,
 	InvocationDescriptorDto,
-	AiInteropErrorDto
+	AiInteropErrorDto,
+	SessionConfigDto,
+	SessionDescriptorDto,
+	ParticipantDescriptorDto,
+	PermissionResultDto,
+	PermissionRecordDto,
+	AuditEventDto,
+	AuditEventFilterDto
 } from '../common/extHost.protocol.js';
 
 @extHostNamedCustomer(MainContext.MainThreadAiInterop)
@@ -26,7 +33,10 @@ export class MainThreadAiInterop extends Disposable implements MainThreadAiInter
 
 	constructor(
 		extHostContext: IExtHostContext,
-		@IAIInteropBusService private readonly busService: IAIInteropBusService
+		@IAIInteropBusService private readonly busService: IAIInteropBusService,
+		@IAISessionBrokerService private readonly sessionBroker: IAISessionBrokerService,
+		@IAIInteropPolicyService private readonly policyService: IAIInteropPolicyService,
+		@IAIInteropAuditService private readonly auditService: IAIInteropAuditService
 	) {
 		super();
 		this._proxy = extHostContext.getProxy(ExtHostContext.ExtHostAiInterop);
@@ -157,5 +167,165 @@ export class MainThreadAiInterop extends Disposable implements MainThreadAiInter
 			} : undefined,
 			metadata: invocation.metadata
 		};
+	}
+
+	// ========================================
+	// Session Broker Methods
+	// ========================================
+
+	async $createSession(config: SessionConfigDto): Promise<SessionDescriptorDto> {
+		const session = await this.sessionBroker.createSession({
+			displayName: config.displayName,
+			description: config.description,
+			metadata: config.metadata
+		});
+		return {
+			id: session.id,
+			displayName: session.displayName,
+			description: session.description,
+			status: session.status,
+			participants: session.participants,
+			invocations: session.invocations,
+			createdAt: session.createdAt,
+			lastActiveAt: session.lastActiveAt,
+			metadata: session.metadata
+		};
+	}
+
+	async $deleteSession(sessionId: string): Promise<void> {
+		await this.sessionBroker.deleteSession(sessionId);
+	}
+
+	async $getSession(sessionId: string): Promise<SessionDescriptorDto | undefined> {
+		const session = this.sessionBroker.getSession(sessionId);
+		if (!session) {
+			return undefined;
+		}
+		return {
+			id: session.id,
+			displayName: session.displayName,
+			description: session.description,
+			status: session.status,
+			participants: session.participants,
+			invocations: session.invocations,
+			createdAt: session.createdAt,
+			lastActiveAt: session.lastActiveAt,
+			metadata: session.metadata
+		};
+	}
+
+	async $getAllSessions(): Promise<SessionDescriptorDto[]> {
+		return this.sessionBroker.getAllSessions().map(session => ({
+			id: session.id,
+			displayName: session.displayName,
+			description: session.description,
+			status: session.status,
+			participants: session.participants,
+			invocations: session.invocations,
+			createdAt: session.createdAt,
+			lastActiveAt: session.lastActiveAt,
+			metadata: session.metadata
+		}));
+	}
+
+	async $addParticipant(sessionId: string, participant: ParticipantDescriptorDto): Promise<void> {
+		await this.sessionBroker.addParticipant(sessionId, participant);
+	}
+
+	async $removeParticipant(sessionId: string, participantId: string): Promise<void> {
+		await this.sessionBroker.removeParticipant(sessionId, participantId);
+	}
+
+	async $getActiveSession(): Promise<SessionDescriptorDto | undefined> {
+		const session = this.sessionBroker.getActiveSession();
+		if (!session) {
+			return undefined;
+		}
+		return {
+			id: session.id,
+			displayName: session.displayName,
+			description: session.description,
+			status: session.status,
+			participants: session.participants,
+			invocations: session.invocations,
+			createdAt: session.createdAt,
+			lastActiveAt: session.lastActiveAt,
+			metadata: session.metadata
+		};
+	}
+
+	async $setActiveSession(sessionId: string): Promise<void> {
+		await this.sessionBroker.setActiveSession(sessionId);
+	}
+
+	// ========================================
+	// Policy Service Methods
+	// ========================================
+
+	async $checkPermission(callerId: string, targetId: string): Promise<PermissionResultDto> {
+		const caller = this.busService.getEndpoint(callerId);
+		const target = this.busService.getEndpoint(targetId);
+		if (!caller || !target) {
+			return { allowed: false, reason: 'Endpoint not found' };
+		}
+		const decision = await this.policyService.checkPermission(caller, target, {});
+		return {
+			allowed: decision.allowed,
+			reason: decision.reason,
+			scope: decision.scope
+		};
+	}
+
+	async $requestPermission(callerId: string, targetId: string): Promise<PermissionResultDto> {
+		const caller = this.busService.getEndpoint(callerId);
+		const target = this.busService.getEndpoint(targetId);
+		if (!caller || !target) {
+			return { allowed: false, reason: 'Endpoint not found' };
+		}
+		const decision = await this.policyService.requestPermission(caller, target, {});
+		return {
+			allowed: decision.allowed,
+			reason: decision.reason,
+			scope: decision.scope
+		};
+	}
+
+	async $getPermissions(callerId?: string): Promise<PermissionRecordDto[]> {
+		return this.policyService.getPermissions(callerId).map(record => ({
+			callerId: record.callerId,
+			targetId: record.targetId,
+			scope: record.scope,
+			grantedAt: record.grantedAt,
+			expiresAt: record.expiresAt
+		}));
+	}
+
+	// ========================================
+	// Audit Service Methods
+	// ========================================
+
+	async $getAuditEvents(filter?: AuditEventFilterDto): Promise<AuditEventDto[]> {
+		const auditFilter = filter ? {
+			type: filter.type as any,
+			extensionId: filter.extensionId,
+			invocationId: filter.invocationId,
+			sessionId: filter.sessionId,
+			startTime: filter.startTime,
+			endTime: filter.endTime
+		} : undefined;
+
+		return this.auditService.getEvents(auditFilter).map(event => ({
+			id: event.id,
+			type: event.type,
+			timestamp: event.timestamp,
+			extensionId: event.extensionId,
+			invocationId: event.invocationId,
+			sessionId: event.sessionId,
+			details: event.details
+		}));
+	}
+
+	async $clearAuditEvents(): Promise<void> {
+		this.auditService.clearEvents();
 	}
 }

@@ -62,6 +62,25 @@
   - `$getAllEndpoints(): Promise<EndpointDescriptorDto[]>`
   - `$getInvocation(invocationId: string): Promise<InvocationDescriptorDto | undefined>`
 
+- [ ] **Session Broker 管理方法**
+  - `$createSession(config: SessionConfigDto): Promise<SessionDescriptorDto>`
+  - `$deleteSession(sessionId: string): Promise<void>`
+  - `$getSession(sessionId: string): Promise<SessionDescriptorDto | undefined>`
+  - `$getAllSessions(): Promise<SessionDescriptorDto[]>`
+  - `$addParticipant(sessionId: string, participant: ParticipantDescriptorDto): Promise<void>`
+  - `$removeParticipant(sessionId: string, participantId: string): Promise<void>`
+  - `$getActiveSession(): Promise<SessionDescriptorDto | undefined>`
+  - `$setActiveSession(sessionId: string): Promise<void>`
+
+- [ ] **Policy Service 方法**
+  - `$checkPermission(callerId: string, targetId: string): Promise<PermissionResultDto>`
+  - `$requestPermission(callerId: string, targetId: string): Promise<PermissionResultDto>`
+  - `$getPermissions(callerId?: string): Promise<PermissionRecordDto[]>`
+
+- [ ] **Audit Service 方法**
+  - `$getAuditEvents(filter?: AuditEventFilterDto): Promise<AuditEventDto[]>`
+  - `$clearAuditEvents(): Promise<void>`
+
 #### 2.2 ExtHostAiInteropShape
 
 - [ ] **接口定义存在**
@@ -84,6 +103,13 @@
   - `InvocationChunkDto`
   - `InvocationDescriptorDto`
   - `AiInteropErrorDto`
+  - `SessionConfigDto`
+  - `SessionDescriptorDto`
+  - `ParticipantDescriptorDto`
+  - `PermissionResultDto`
+  - `PermissionRecordDto`
+  - `AuditEventDto`
+  - `AuditEventFilterDto`
 
 - [ ] **DTO 字段类型正确**
   - 使用可序列化的类型(string, number, boolean, object)
@@ -107,6 +133,9 @@
 - [ ] **依赖注入正确**
   - 注入 `IExtHostContext`
   - 注入 `IAIInteropBusService`
+  - 注入 `IAISessionBrokerService`
+  - 注入 `IAIInteropPolicyService`
+  - 注入 `IAIInteropAuditService`
   - 注入 `ILogService`
 
 - [ ] **Proxy 获取正确**
@@ -145,6 +174,28 @@
   - `$getEndpoint` 调用 `busService.getEndpoint`
   - `$getAllEndpoints` 调用 `busService.getAllEndpoints`
   - `$getInvocation` 调用 `busService.getInvocation`
+  - DTO 转换正确
+
+- [ ] **Session Broker 方法**
+  - `$createSession` 调用 `sessionBrokerService.createSession`
+  - `$deleteSession` 调用 `sessionBrokerService.deleteSession`
+  - `$getSession` 调用 `sessionBrokerService.getSession`
+  - `$getAllSessions` 调用 `sessionBrokerService.getAllSessions`
+  - `$addParticipant` 调用 `sessionBrokerService.addParticipant`
+  - `$removeParticipant` 调用 `sessionBrokerService.removeParticipant`
+  - `$getActiveSession` 调用 `sessionBrokerService.getActiveSession`
+  - `$setActiveSession` 调用 `sessionBrokerService.setActiveSession`
+  - DTO 转换正确
+
+- [ ] **Policy Service 方法**
+  - `$checkPermission` 调用 `policyService.checkPermission`
+  - `$requestPermission` 调用 `policyService.requestPermission`
+  - `$getPermissions` 调用 `policyService.getPermissions`
+  - DTO 转换正确
+
+- [ ] **Audit Service 方法**
+  - `$getAuditEvents` 调用 `auditService.getEvents`
+  - `$clearAuditEvents` 调用 `auditService.clearEvents`
   - DTO 转换正确
 
 #### 3.3 事件订阅与转发

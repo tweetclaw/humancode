@@ -1870,7 +1870,75 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			getAllEndpoints() {
 				checkProposedApiEnabled(extension, 'aiInterop');
 				return extHostAiInterop.getAllEndpoints();
-			}
+			},
+			// Session Broker API - TODO: Add to vscode.proposed.aiInterop.d.ts
+			// async createSession(config: any) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$createSession(config);
+			// },
+			// async deleteSession(sessionId: string) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$deleteSession(sessionId);
+			// },
+			// async getSession(sessionId: string) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$getSession(sessionId);
+			// },
+			// async getAllSessions() {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$getAllSessions();
+			// },
+			// async addParticipant(sessionId: string, participant: any) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$addParticipant(sessionId, participant);
+			// },
+			// async removeParticipant(sessionId: string, participantId: string) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$removeParticipant(sessionId, participantId);
+			// },
+			// async getActiveSession() {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$getActiveSession();
+			// },
+			// async setActiveSession(sessionId: string) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$setActiveSession(sessionId);
+			// },
+			// Policy Service API - TODO: Add to vscode.proposed.aiInterop.d.ts
+			// async checkPermission(callerId: string, targetId: string) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$checkPermission(callerId, targetId);
+			// },
+			// async requestPermission(callerId: string, targetId: string) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$requestPermission(callerId, targetId);
+			// },
+			// async getPermissions(callerId?: string) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$getPermissions(callerId);
+			// },
+			// Audit Service API - TODO: Add to vscode.proposed.aiInterop.d.ts
+			// async getAuditEvents(filter?: any) {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$getAuditEvents(filter);
+			// },
+			// async clearAuditEvents() {
+			// 	checkProposedApiEnabled(extension, 'aiInterop');
+			// 	const mainThreadProxy = rpcProtocol.getProxy(MainContext.MainThreadAiInterop);
+			// 	return mainThreadProxy.$clearAuditEvents();
+			// }
 		};
 
 		// Expose test API for internal testing (not part of public API)

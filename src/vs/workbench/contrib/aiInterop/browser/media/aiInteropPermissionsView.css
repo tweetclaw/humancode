@@ -1,0 +1,51 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.ai-interop-permissions-view {
+	padding: 10px;
+}
+
+.ai-interop-permissions-view .empty-message {
+	padding: 20px;
+	text-align: center;
+	opacity: 0.6;
+}
+
+.ai-interop-permissions-view .permissions-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.ai-interop-permissions-view .permission-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 10px;
+	border: 1px solid var(--vscode-panel-border);
+	border-radius: 4px;
+	background-color: var(--vscode-editor-background);
+}
+
+.ai-interop-permissions-view .permission-info {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.ai-interop-permissions-view .caller-target {
+	font-weight: 600;
+	font-family: var(--vscode-editor-font-family);
+}
+
+.ai-interop-permissions-view .permission-details {
+	font-size: 0.9em;
+	opacity: 0.8;
+}
+
+.ai-interop-permissions-view .permission-actions {
+	margin-left: 10px;
+}

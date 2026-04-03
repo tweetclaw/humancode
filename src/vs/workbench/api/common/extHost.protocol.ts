@@ -1821,6 +1821,68 @@ export const enum AiInteropErrorCode {
 	HOST_KIND_UNSUPPORTED = 'HOST_KIND_UNSUPPORTED',
 }
 
+// Session Broker DTOs
+export interface SessionConfigDto {
+	displayName: string;
+	description?: string;
+	metadata?: { [key: string]: any };
+}
+
+export interface SessionDescriptorDto {
+	id: string;
+	displayName: string;
+	description?: string;
+	status: 'active' | 'idle' | 'archived';
+	participants: ParticipantDescriptorDto[];
+	invocations: string[];
+	createdAt: number;
+	lastActiveAt: number;
+	metadata?: { [key: string]: any };
+}
+
+export interface ParticipantDescriptorDto {
+	id: string;
+	endpointId: string;
+	role: 'controller' | 'worker' | 'observer';
+	joinedAt: number;
+}
+
+// Policy Service DTOs
+export interface PermissionResultDto {
+	allowed: boolean;
+	reason?: string;
+	scope?: 'once' | 'session' | 'always';
+}
+
+export interface PermissionRecordDto {
+	callerId: string;
+	targetId: string;
+	scope: 'once' | 'session' | 'always';
+	grantedAt: number;
+	expiresAt?: number;
+}
+
+// Audit Service DTOs
+export interface AuditEventDto {
+	id: string;
+	type: string;
+	timestamp: number;
+	extensionId?: string;
+	invocationId?: string;
+	sessionId?: string;
+	details: { [key: string]: any };
+}
+
+export interface AuditEventFilterDto {
+	type?: string;
+	extensionId?: string;
+	invocationId?: string;
+	sessionId?: string;
+	startTime?: number;
+	endTime?: number;
+}
+
+
 export interface MainThreadAiInteropShape extends IDisposable {
 	// Endpoint management
 	$registerEndpoint(descriptor: EndpointDescriptorDto): Promise<void>;
@@ -1837,6 +1899,25 @@ export interface MainThreadAiInteropShape extends IDisposable {
 	$getEndpoint(endpointId: string): Promise<EndpointDescriptorDto | undefined>;
 	$getAllEndpoints(): Promise<EndpointDescriptorDto[]>;
 	$getInvocation(invocationId: string): Promise<InvocationDescriptorDto | undefined>;
+
+	// Session Broker management
+	$createSession(config: SessionConfigDto): Promise<SessionDescriptorDto>;
+	$deleteSession(sessionId: string): Promise<void>;
+	$getSession(sessionId: string): Promise<SessionDescriptorDto | undefined>;
+	$getAllSessions(): Promise<SessionDescriptorDto[]>;
+	$addParticipant(sessionId: string, participant: ParticipantDescriptorDto): Promise<void>;
+	$removeParticipant(sessionId: string, participantId: string): Promise<void>;
+	$getActiveSession(): Promise<SessionDescriptorDto | undefined>;
+	$setActiveSession(sessionId: string): Promise<void>;
+
+	// Policy Service
+	$checkPermission(callerId: string, targetId: string): Promise<PermissionResultDto>;
+	$requestPermission(callerId: string, targetId: string): Promise<PermissionResultDto>;
+	$getPermissions(callerId?: string): Promise<PermissionRecordDto[]>;
+
+	// Audit Service
+	$getAuditEvents(filter?: AuditEventFilterDto): Promise<AuditEventDto[]>;
+	$clearAuditEvents(): Promise<void>;
 }
 
 export interface ExtHostAiInteropShape {
