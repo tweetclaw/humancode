@@ -3913,6 +3913,25 @@ export interface ExtHostGitExtensionShape {
 	$diffBetweenWithStats2(handle: number, ref: string, path?: string): Promise<GitDiffChangeDto[]>;
 }
 
+// --- Claude Code Bridge
+
+export interface ExtHostClaudeCodeBridgeShape {
+	/**
+	 * Send a message to Claude Code extension
+	 * @param text The message text to send
+	 * @returns Promise that resolves when the message is sent
+	 */
+	$sendMessageToClaudeCode(text: string): Promise<void>;
+}
+
+export interface MainThreadClaudeCodeBridgeShape extends IDisposable {
+	/**
+	 * Notify Main Thread that Claude Code has output
+	 * @param text The output text from Claude Code
+	 */
+	$onClaudeCodeOutput(text: string): void;
+}
+
 // --- proxy identifiers
 
 export const MainContext = {
@@ -4000,6 +4019,7 @@ export const MainContext = {
 	MainThreadBrowsers: createProxyIdentifier<MainThreadBrowsersShape>('MainThreadBrowsers'),
 	MainThreadTestAiInterop: createProxyIdentifier<MainThreadTestAiInteropShape>('MainThreadTestAiInterop'),
 	MainThreadAiInterop: createProxyIdentifier<MainThreadAiInteropShape>('MainThreadAiInterop'),
+	MainThreadClaudeCodeBridge: createProxyIdentifier<MainThreadClaudeCodeBridgeShape>('MainThreadClaudeCodeBridge'),
 };
 
 export const ExtHostContext = {
@@ -4083,4 +4103,5 @@ export const ExtHostContext = {
 	ExtHostBrowsers: createProxyIdentifier<ExtHostBrowsersShape>('ExtHostBrowsers'),
 	ExtHostTestAiInterop: createProxyIdentifier<ExtHostTestAiInteropShape>('ExtHostTestAiInterop'),
 	ExtHostAiInterop: createProxyIdentifier<ExtHostAiInteropShape>('ExtHostAiInterop'),
+	ExtHostClaudeCodeBridge: createProxyIdentifier<ExtHostClaudeCodeBridgeShape>('ExtHostClaudeCodeBridge'),
 };

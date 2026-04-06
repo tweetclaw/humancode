@@ -61,6 +61,7 @@ export type ToWebviewMessage = {
 	'focus': void;
 	'message': { message: any; transfer?: ArrayBuffer[] };
 	'execCommand': string;
+	'executeScript': { script: string };
 	'did-load-resource':
 	| { id: number; status: 401 | 404; path: string }
 	| { id: number; status: 304; path: string; mime: string; mtime: number | undefined }

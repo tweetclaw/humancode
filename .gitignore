@@ -21,3 +21,4 @@ bin-release/
 # Extension build output
 extensions/**/dist/
 2.log
+.profile-oss/crashes/pending/d6ddb37b-c1bc-4a79-a9b9-0a1e4e2f2754.dmp

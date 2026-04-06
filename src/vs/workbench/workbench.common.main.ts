@@ -221,6 +221,9 @@ import './contrib/imageCarousel/browser/imageCarousel.contribution.js';
 // AI Interop
 import './contrib/aiInterop/browser/aiInterop.contribution.js';
 
+// Claude Code Bridge
+import './contrib/claudeCodeBridge/browser/claudeCodeBridge.contribution.js';
+
 // Interactive
 import './contrib/interactive/browser/interactive.contribution.js';
 

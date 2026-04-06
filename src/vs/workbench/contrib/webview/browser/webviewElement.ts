@@ -754,6 +754,10 @@ export class WebviewElement extends Disposable implements IWebviewElement, Webvi
 		this.execCommand('redo');
 	}
 
+	public executeScript(script: string): Promise<boolean> {
+		return this._send('executeScript', { script });
+	}
+
 	private execCommand(command: string) {
 		if (this.element) {
 			this._send('execCommand', command);

@@ -100,6 +100,7 @@ import { IExtHostTask } from './extHostTask.js';
 import { ExtHostTelemetryLogger, IExtHostTelemetry, isNewAppInstall } from './extHostTelemetry.js';
 import { ExtHostTestAiInterop } from './extHostTestAiInterop.js';
 import { ExtHostAiInterop } from './extHostAiInterop.js';
+import { ExtHostClaudeCodeBridge } from './extHostClaudeCodeBridge.js';
 import { IExtHostTerminalService } from './extHostTerminalService.js';
 import { IExtHostTerminalShellIntegration } from './extHostTerminalShellIntegration.js';
 import { IExtHostTesting } from './extHostTesting.js';
@@ -253,6 +254,7 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 	const extHostBrowsers = rpcProtocol.set(ExtHostContext.ExtHostBrowsers, new ExtHostBrowsers(rpcProtocol));
 	const extHostTestAiInterop = rpcProtocol.set(ExtHostContext.ExtHostTestAiInterop, new ExtHostTestAiInterop(rpcProtocol));
 	const extHostAiInterop = rpcProtocol.set(ExtHostContext.ExtHostAiInterop, new ExtHostAiInterop(rpcProtocol));
+	rpcProtocol.set(ExtHostContext.ExtHostClaudeCodeBridge, new ExtHostClaudeCodeBridge(rpcProtocol, extensionService, extHostLogService));
 
 	rpcProtocol.set(ExtHostContext.ExtHostMcp, accessor.get(IExtHostMpcService));
 

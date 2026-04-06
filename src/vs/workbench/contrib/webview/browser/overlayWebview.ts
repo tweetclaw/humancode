@@ -385,6 +385,13 @@ export class OverlayWebview extends Disposable implements IOverlayWebview {
 		return false;
 	}
 
+	public async executeScript(script: string): Promise<boolean> {
+		if (this._webview.value) {
+			return this._webview.value.executeScript(script);
+		}
+		return false;
+	}
+
 	focus(): void { this._webview.value?.focus(); }
 	reload(): void { this._webview.value?.reload(); }
 	selectAll(): void { this._webview.value?.selectAll(); }

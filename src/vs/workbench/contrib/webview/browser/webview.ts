@@ -253,6 +253,13 @@ export interface IWebview extends IDisposable {
 
 	postMessage(message: any, transfer?: readonly ArrayBuffer[]): Promise<boolean>;
 
+	/**
+	 * Execute JavaScript code in the webview context.
+	 * @param script The JavaScript code to execute
+	 * @returns A promise that resolves to true if the script was sent successfully
+	 */
+	executeScript(script: string): Promise<boolean>;
+
 	focus(): void;
 	reload(): void;
 
