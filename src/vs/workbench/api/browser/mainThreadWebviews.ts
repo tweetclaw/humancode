@@ -41,6 +41,12 @@ export class MainThreadWebviews extends Disposable implements extHostProtocol.Ma
 		super();
 
 		this._proxy = context.getProxy(extHostProtocol.ExtHostContext.ExtHostWebviews);
+
+		// Expose to global for debugging and testing
+		if (typeof window !== 'undefined') {
+			(window as any).__mainThreadWebviews = this;
+			console.log('[MainThreadWebviews] Instance exposed to window.__mainThreadWebviews');
+		}
 	}
 
 	public addWebview(handle: extHostProtocol.WebviewHandle, webview: IWebview, options: { serializeBuffersForPostMessage: boolean }): void {
@@ -50,6 +56,9 @@ export class MainThreadWebviews extends Disposable implements extHostProtocol.Ma
 
 		this._webviews.set(handle, webview);
 		this.hookupWebviewEventDelegate(handle, webview, options);
+
+		// Log webview registration for debugging
+		console.log('[MainThreadWebviews] Webview registered:', handle, 'viewType:', (webview as any).providedViewType);
 	}
 
 	public $setHtml(handle: extHostProtocol.WebviewHandle, value: string): void {
@@ -69,6 +78,19 @@ export class MainThreadWebviews extends Disposable implements extHostProtocol.Ma
 			return false;
 		}
 		const { message, arrayBuffers } = deserializeWebviewMessage(jsonMessage, buffers);
+
+		// Intercept messages to Claude Code webview
+		const viewType = (webview as any).providedViewType;
+		if (viewType && viewType.includes('claude')) {
+			console.log('[MainThreadWebviews] ========================================');
+			console.log('[MainThreadWebviews] Message TO Claude Code');
+			console.log('[MainThreadWebviews] Handle:', handle);
+			console.log('[MainThreadWebviews] ViewType:', viewType);
+			console.log('[MainThreadWebviews] Message:', JSON.stringify(message, null, 2));
+			console.log('[MainThreadWebviews] ========================================');
+			// TODO: Forward to custom UI or process the message
+		}
+
 		return webview.postMessage(message, arrayBuffers);
 	}
 
@@ -78,6 +100,18 @@ export class MainThreadWebviews extends Disposable implements extHostProtocol.Ma
 		disposables.add(webview.onDidClickLink((uri) => this.onDidClickLink(handle, uri)));
 
 		disposables.add(webview.onMessage((message) => {
+			// Intercept messages from Claude Code webview
+			const viewType = (webview as any).providedViewType;
+			if (viewType && viewType.includes('claude')) {
+				console.log('[MainThreadWebviews] ========================================');
+				console.log('[MainThreadWebviews] Message FROM Claude Code');
+				console.log('[MainThreadWebviews] Handle:', handle);
+				console.log('[MainThreadWebviews] ViewType:', viewType);
+				console.log('[MainThreadWebviews] Message:', JSON.stringify(message.message, null, 2));
+				console.log('[MainThreadWebviews] ========================================');
+				// TODO: Forward to custom UI or process the message
+			}
+
 			const serialized = serializeWebviewMessage(message.message, options);
 			this._proxy.$onMessage(handle, serialized.message, new SerializableObjectWithBuffers(serialized.buffers));
 		}));
@@ -138,6 +172,45 @@ export class MainThreadWebviews extends Disposable implements extHostProtocol.Ma
 			</head>
 			<body>${localize('errorMessage', "An error occurred while loading view: {0}", escape(viewType))}</body>
 		</html>`;
+	}
+
+	/**
+	 * Send a message to a specific webview instance (simulating a message from the webview to Extension Host)
+	 * This allows us to programmatically send messages to AI extensions like Claude Code
+	 */
+	public sendMessageToExtensionHost(handle: extHostProtocol.WebviewHandle, message: any): boolean {
+		const webview = this.tryGetWebview(handle);
+		if (!webview) {
+			console.error('[MainThreadWebviews] Cannot send message: webview not found:', handle);
+			return false;
+		}
+
+		console.log('[MainThreadWebviews] ========================================');
+		console.log('[MainThreadWebviews] Sending message to Extension Host');
+		console.log('[MainThreadWebviews] Handle:', handle);
+		console.log('[MainThreadWebviews] ViewType:', (webview as any).providedViewType);
+		console.log('[MainThreadWebviews] Message:', JSON.stringify(message, null, 2));
+		console.log('[MainThreadWebviews] ========================================');
+
+		// Serialize the message and send it to Extension Host via RPC
+		const serialized = serializeWebviewMessage(message, { serializeBuffersForPostMessage: true });
+		this._proxy.$onMessage(handle, serialized.message, new SerializableObjectWithBuffers(serialized.buffers));
+
+		return true;
+	}
+
+	/**
+	 * Get all registered Claude Code webview instances
+	 */
+	public getClaudeCodeInstances(): Array<{ handle: string; viewType: string }> {
+		const instances: Array<{ handle: string; viewType: string }> = [];
+		for (const [handle, webview] of this._webviews) {
+			const viewType = (webview as any).providedViewType;
+			if (viewType && viewType.includes('claude')) {
+				instances.push({ handle, viewType });
+			}
+		}
+		return instances;
 	}
 }
 
