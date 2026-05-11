@@ -81,7 +81,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.23",
-    "@github/copilot": "^1.0.4-0",
+    "@github/copilot": "^1.0.45",
     "@github/copilot-sdk": "^0.1.32",
     "@microsoft/1ds-core-js": "^3.2.13",
     "@microsoft/1ds-post-js": "^3.2.13",
@@ -176,7 +176,7 @@
     "cookie": "^0.7.2",
     "debounce": "^1.0.0",
     "deemon": "^1.13.6",
-    "electron": "39.8.2",
+    "electron": "39.8.5",
     "eslint": "^9.36.0",
     "eslint-formatter-compact": "^8.40.0",
     "eslint-plugin-header": "3.1.1",
